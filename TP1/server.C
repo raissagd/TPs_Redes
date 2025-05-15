@@ -40,8 +40,14 @@ void usage (int argc, char **argv) {
     Retorno: Retorna um inteiro entre 0 e 4
 */
 int pick_random_move() {
-    int move = rand() % 5; // Random number between 0 and 4
+    int move = rand() % 5; // Número alatório entre 0 e 4
     return move;
+}
+
+void print_playagain_message() {
+    printf("Deseja jogar novamente?");
+    printf("1 - Sim\n");
+    printf("0 - Não\n");
 }
 
 int who_wins(int opt1, int opt2) {
@@ -97,7 +103,7 @@ int main (int argc, char **argv) {
     }
 
     // Coloca o socket em modo de escuta (esperando conexões)
-    if (0 != listen(s, 10)) {
+    if (0 != listen(s, 1)) {
         logexit("listen");
     }
 
@@ -129,8 +135,6 @@ int main (int argc, char **argv) {
         memset(buf, 0, BUFSZ);
         size_t count  = recv(csock, buf, BUFSZ, 0); // Number of bytes received
         printf("Cliente escolheu %s.\n", buf);
-        // printf("Cliente escolheu aleatoriamente %s.\n", buf);
-        // printf("Placar atualizado: Cliente 0 x 1 Servidor\n");
 
         if(!valid_move(atoi(buf))) {
             printf("Erro: opção inválida de jogada.\n");

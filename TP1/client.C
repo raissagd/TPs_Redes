@@ -27,6 +27,15 @@ void usage (int argc, char **argv) {
     exit(EXIT_FAILURE);
 }
 
+void print_initial_message() {
+    printf("Escolha sua jogada:\n");
+    printf("0 - Nuclear Attack\n");
+    printf("1 - Intercept Attack\n");
+    printf("2 - Cyber Attack\n");
+    printf("3 - Drone Strike\n");
+    printf("4 - Bio Attack\n");
+}
+
 #define BUFSZ 1024
 
 int main (int argc, char **argv) {
@@ -60,12 +69,7 @@ int main (int argc, char **argv) {
 
     char buf[BUFSZ];
     // Prepara o buffer para receber a mensagem do usuário, envia pelo socket
-    printf("Escolha sua jogada:\n");
-    printf("0 - Nuclear Attack\n");
-    printf("1 - Intercept Attack\n");
-    printf("2 - Cyber Attack\n");
-    printf("3 - Drone Strike\n");
-    printf("4 - Bio Attack\n");
+    print_initial_message();
     
     fgets(buf, BUFSZ - 1, stdin);
     buf[strcspn(buf, "\n")] = '\0'; // remove o \n do final, se houver
