@@ -98,3 +98,21 @@ int server_sockaddr(const char *proto, const char *portstr, struct sockaddr_stor
 
     return 0; // Success
 }
+
+int valid_move(int opt) {
+    if (opt == 0 || opt == 1 || opt == 2 || opt == 3 || opt == 4) {
+        return 1; // Valid move
+    }
+    return 0;
+}
+
+const char* option_to_action(int opt) {
+    switch (opt) {
+        case 0: return "Nuclear Attack";
+        case 1: return "Intercept Attack";
+        case 2: return "Cyber Attack";
+        case 3: return "Drone Strike";
+        case 4: return "Bio Attack";
+        default: return "Invalid Option";
+    }
+}

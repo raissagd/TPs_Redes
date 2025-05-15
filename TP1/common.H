@@ -10,3 +10,7 @@ int addrparse(const char *addrstr, const char *portstr, struct sockaddr_storage 
 void addrtostr(const struct sockaddr *addr, char *str, size_t strsize);
 
 int server_sockaddr(const char *proto, const char *portstr, struct sockaddr_storage *storage);
+
+int valid_move(int opt);
+
+const char* option_to_action(int opt);
