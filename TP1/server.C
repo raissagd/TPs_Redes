@@ -131,6 +131,8 @@ int main (int argc, char **argv) {
         addrtostr(caddr, caddrstr, BUFSZ);
         printf("Cliente conectado.\n");
 
+        printf("Apresentando as opções para o cliente.\n");
+
         char buf[BUFSZ];
         memset(buf, 0, BUFSZ);
         size_t count  = recv(csock, buf, BUFSZ, 0); // Number of bytes received
@@ -147,12 +149,12 @@ int main (int argc, char **argv) {
 
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
 
-        printf("Placar atualizado: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
+        //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
         
         //sprintf(buf, "remote endpoint: %.1000s\n", caddrstr);
         memset(buf, 0, BUFSZ);  // Limpa o buffer antes de reutilizá-lo
-        sprintf(buf, "%d", result);  // Converte o resultado (1, 0 ou -1) para string
-        count = send(csock, buf, strlen(buf) + 1, 0);  // Envia o resultado como string
+        sprintf(buf, "%d %d", result, server_move);  // Envia o resultado e a jogada do servidor
+        count = send(csock, buf, strlen(buf) + 1, 0);  
         
         if(count != strlen(buf) + 1) {
             logexit("send");

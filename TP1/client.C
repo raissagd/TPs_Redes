@@ -36,6 +36,17 @@ void print_initial_message() {
     printf("4 - Bio Attack\n");
 }
 
+const char* option_to_action(int opt) {
+    switch (opt) {
+        case 0: return "Nuclear Attack";
+        case 1: return "Intercept Attack";
+        case 2: return "Cyber Attack";
+        case 3: return "Drone Strike";
+        case 4: return "Bio Attack";
+        default: return "Invalid Option";
+    }
+}
+
 #define BUFSZ 1024
 
 int main (int argc, char **argv) {
@@ -98,9 +109,19 @@ int main (int argc, char **argv) {
         }
         total += count;
     }
-    
-    // printf("Servidor escolheu: Nuclear Attack.\n");
-    // printf("Resultado: Empate!\n");
+
+    int result, server_move;
+    sscanf(buf, "%d %d", &result, &server_move); // Lê o resultado e a jogada do servidor
+
+    printf("Servidor escolheu: %s.\n", option_to_action(server_move));
+
+    if (result == 1) {
+    printf("Resultado: Vitória!\n");
+    } else if (result == 0) {
+        printf("Resultado: Empate!\n");
+    } else {
+        printf("Resultado: Você perdeu!\n");
+    }
 
     close(s);
 
