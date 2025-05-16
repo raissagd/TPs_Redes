@@ -1,3 +1,15 @@
+/*
+-----------------------------------------------------
+Arquivo common.C referente ao TP1
+Implementacao de funcoes comuns
+Materia Redes de Computadores
+Semestre 2025/01
+
+Aluna: Raissa Gonçalves Diniz
+Matricula: 2022055823
+-----------------------------------------------------
+*/
+
 # include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -101,6 +113,13 @@ int server_sockaddr(const char *proto, const char *portstr, struct sockaddr_stor
 
 int valid_move(int opt) {
     if (opt == 0 || opt == 1 || opt == 2 || opt == 3 || opt == 4) {
+        return 1; // Valid move
+    }
+    return 0;
+}
+
+int valid_playagain(int opt) {
+    if (opt == 0 || opt == 1) {
         return 1; // Valid move
     }
     return 0;

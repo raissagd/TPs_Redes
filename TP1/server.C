@@ -44,12 +44,6 @@ int pick_random_move() {
     return move;
 }
 
-void print_playagain_message() {
-    printf("Deseja jogar novamente?");
-    printf("1 - Sim\n");
-    printf("0 - Não\n");
-}
-
 int who_wins(int opt1, int opt2) {
     /*
     0 - Nuclear Attack
@@ -116,32 +110,40 @@ int main (int argc, char **argv) {
         printf("Servidor iniciado em modo IPv6 na porta %s. Aguardando conexão...\n", argv[2]);
     }
 
+    struct sockaddr_storage cstorage;
+    struct sockaddr *caddr = (struct sockaddr *)&cstorage;
+    socklen_t caddrlen = sizeof(cstorage);
+
+    // Aceita conexão de um cliente
+    int csock = accept(s, caddr, &caddrlen);
+    if (csock == -1) {
+        logexit("accept");
+    }
+
+    char caddrstr[BUFSZ];
+    addrtostr(caddr, caddrstr, BUFSZ);
+    printf("Cliente conectado.\n");
+
+    char buf[BUFSZ];
+        
     while(1) {
-        struct sockaddr_storage cstorage;
-        struct sockaddr *caddr = (struct sockaddr *)&cstorage;
-        socklen_t caddrlen = sizeof(cstorage);
-
-        // Aceita conexão de um cliente
-        int csock = accept(s, caddr, &caddrlen);
-        if (csock == -1) {
-            logexit("accept");
-        }
-
-        char caddrstr[BUFSZ];
-        addrtostr(caddr, caddrstr, BUFSZ);
-        printf("Cliente conectado.\n");
-
         printf("Apresentando as opções para o cliente.\n");
 
-        char buf[BUFSZ];
         memset(buf, 0, BUFSZ);
         size_t count  = recv(csock, buf, BUFSZ, 0); // Number of bytes received
+
+        if (count == 0) {
+            // Se count for 0, significa que o cliente fechou a conexão
+           close(csock);
+            continue;
+        }
+            
         printf("Cliente escolheu %s.\n", buf);
 
         if(!valid_move(atoi(buf))) {
             printf("Erro: opção inválida de jogada.\n");
             close(csock);
-            continue;
+            continue; // OLHAR AQUI SE EU NAO TENHO QUE POR UM BREAK
         }
 
         int server_move = pick_random_move(); // Jogada aleatória do servidor
@@ -149,19 +151,38 @@ int main (int argc, char **argv) {
 
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
 
-        //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
-        
-        //sprintf(buf, "remote endpoint: %.1000s\n", caddrstr);
+         //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
+            
         memset(buf, 0, BUFSZ);  // Limpa o buffer antes de reutilizá-lo
         sprintf(buf, "%d %d", result, server_move);  // Envia o resultado e a jogada do servidor
         count = send(csock, buf, strlen(buf) + 1, 0);  
-        
+            
         if(count != strlen(buf) + 1) {
             logexit("send");
+         }
+
+        // Espera resposta do cliente se deseja jogar de novo
+        printf("Perguntando se o cliente deseja jogar novamente.\n");
+        memset(buf, 0, BUFSZ);
+        count = recv(csock, buf, BUFSZ, 0);
+
+        /* if(!valid_replay_choice(atoi(buf))) {
+             printf("Erro: resposta inválida para jogar novamente.\n");
+            close(csock);
+             continue;
+        } */
+            
+        if (count <= 0 || buf[0] == '0') {
+            printf("Cliente não deseja jogar novamente.\n");
+            printf("Enviando placar final.\n");
+            printf("Encerrando conexão.\n");
+            printf("Cliente encerrou a sessão.\n");
+            break;
         }
-    
-        close(csock);
     }
+    
+    close(csock);
+    close(s);
 
     exit(EXIT_SUCCESS);
 }
