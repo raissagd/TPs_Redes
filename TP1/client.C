@@ -169,7 +169,12 @@ int main (int argc, char **argv) {
 
         if (buf[0] == '0') {
             printf("Fim de jogo!\n");
-            // printf("Placar final: ")
+            
+            // Recebe o placar final do servidor
+            memset(buf, 0, BUFSZ);
+            count = recv(s, buf, BUFSZ, 0);
+            printf("%s\n", buf);
+
             printf("Obrigada por jogar!\n");
             break;
         }

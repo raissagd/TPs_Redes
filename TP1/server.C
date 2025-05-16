@@ -128,7 +128,6 @@ int main (int argc, char **argv) {
     
     int client_victories = 0;
     int server_victories = 0;
-    int draws = 0;
         
     while(1) {
         printf("Apresentando as opções para o cliente.\n");
@@ -158,7 +157,6 @@ int main (int argc, char **argv) {
         } else if (result == -1) {
             server_victories++;
         } else {
-            draws++;
             printf("Jogo empatado.\n");
         }
         
@@ -174,7 +172,7 @@ int main (int argc, char **argv) {
             logexit("send");
         }
 
-        printf("Placar: Cliente %d x %d Servidor (Empates: %d)\n", client_victories, server_victories, draws);
+        printf("Placar: Cliente %d x %d Servidor\n", client_victories, server_victories);
 
         // Espera resposta do cliente se deseja jogar de novo
         printf("Perguntando se o cliente deseja jogar novamente.\n");
@@ -188,6 +186,11 @@ int main (int argc, char **argv) {
         if (count <= 0 || buf[0] == '0') {
             printf("Cliente não deseja jogar novamente.\n");
             printf("Enviando placar final.\n");
+
+            memset(buf, 0, BUFSZ);
+            sprintf(buf, "Placar final: Você %d x %d Servidor", client_victories, server_victories);
+            send(csock, buf, strlen(buf) + 1, 0); // Envia o placar final
+
             printf("Encerrando conexão.\n");
             printf("Cliente encerrou a sessão.\n");
             break;
