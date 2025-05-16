@@ -125,6 +125,10 @@ int main (int argc, char **argv) {
     printf("Cliente conectado.\n");
 
     char buf[BUFSZ];
+    
+    int client_victories = 0;
+    int server_victories = 0;
+    int draws = 0;
         
     while(1) {
         printf("Apresentando as opções para o cliente.\n");
@@ -149,6 +153,15 @@ int main (int argc, char **argv) {
         int server_move = pick_random_move(); // Jogada aleatória do servidor
         int result = who_wins(atoi(buf), server_move); // Verifica quem ganhou
 
+        if (result == 1) {
+            client_victories++;
+        } else if (result == -1) {
+            server_victories++;
+        } else {
+            draws++;
+            printf("Jogo empatado.\n");
+        }
+        
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
 
         //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
@@ -161,16 +174,16 @@ int main (int argc, char **argv) {
             logexit("send");
         }
 
+        printf("Placar: Cliente %d x %d Servidor (Empates: %d)\n", client_victories, server_victories, draws);
+
         // Espera resposta do cliente se deseja jogar de novo
         printf("Perguntando se o cliente deseja jogar novamente.\n");
         memset(buf, 0, BUFSZ);
         count = recv(csock, buf, BUFSZ, 0);
 
-        /* if(!valid_replay_choice(atoi(buf))) {
-             printf("Erro: resposta inválida para jogar novamente.\n");
-            close(csock);
-             continue;
-        } */
+        if(!valid_playagain(atoi(buf))) {
+            printf("Erro: resposta inválida para jogar novamente.\n");
+        }
             
         if (count <= 0 || buf[0] == '0') {
             printf("Cliente não deseja jogar novamente.\n");

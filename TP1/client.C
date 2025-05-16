@@ -154,17 +154,17 @@ int main (int argc, char **argv) {
             fgets(buf, BUFSZ - 1, stdin);
             buf[strcspn(buf, "\n")] = '\0';
 
+            count = send(s, buf, strlen(buf) + 1, 0);
+        
+            if (count != strlen(buf) + 1) {
+                logexit("send");
+            }
+
             if (valid_playagain(atoi(buf))) {
                 break; // entrada válida: sai do while
             } else {
                 printf("Por favor, digite 1 para jogar novamente ou 0 para encerrar.\n");
             }
-        }
-
-        count = send(s, buf, strlen(buf) + 1, 0);
-        
-        if (count != strlen(buf) + 1) {
-            logexit("send");
         }
 
         if (buf[0] == '0') {
