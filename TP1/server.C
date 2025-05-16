@@ -130,7 +130,7 @@ int main (int argc, char **argv) {
         printf("Apresentando as opções para o cliente.\n");
 
         memset(buf, 0, BUFSZ);
-        size_t count  = recv(csock, buf, BUFSZ, 0); // Number of bytes received
+        size_t count  = recv(csock, buf, BUFSZ, 0); // Número de bytes recebidos
 
         if (count == 0) {
             // Se count for 0, significa que o cliente fechou a conexão
@@ -143,7 +143,7 @@ int main (int argc, char **argv) {
         if(!valid_move(atoi(buf))) {
             printf("Erro: opção inválida de jogada.\n");
             close(csock);
-            continue; // OLHAR AQUI SE EU NAO TENHO QUE POR UM BREAK
+            continue;
         }
 
         int server_move = pick_random_move(); // Jogada aleatória do servidor
@@ -151,7 +151,7 @@ int main (int argc, char **argv) {
 
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
 
-         //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
+        //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
             
         memset(buf, 0, BUFSZ);  // Limpa o buffer antes de reutilizá-lo
         sprintf(buf, "%d %d", result, server_move);  // Envia o resultado e a jogada do servidor
@@ -159,7 +159,7 @@ int main (int argc, char **argv) {
             
         if(count != strlen(buf) + 1) {
             logexit("send");
-         }
+        }
 
         // Espera resposta do cliente se deseja jogar de novo
         printf("Perguntando se o cliente deseja jogar novamente.\n");

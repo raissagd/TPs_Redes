@@ -1,6 +1,6 @@
 /*
 -----------------------------------------------------
-Arquivo common.Hreferente ao TP1
+Arquivo common.H referente ao TP1
 Implementacao do cabeçalho das funcoes comuns
 Materia Redes de Computadores
 Semestre 2025/01
@@ -9,7 +9,6 @@ Aluna: Raissa Gonçalves Diniz
 Matricula: 2022055823
 -----------------------------------------------------
 */
-
 #pragma once
 #include <stdlib.h>
 

@@ -149,17 +149,20 @@ int main (int argc, char **argv) {
             printf("Resultado: Você perdeu!\n");
         }
 
-        print_playagain_message();
-        fgets(buf, BUFSZ - 1, stdin);
-        buf[strcspn(buf, "\n")] = '\0';
+        while (1) {
+            print_playagain_message();
+            fgets(buf, BUFSZ - 1, stdin);
+            buf[strcspn(buf, "\n")] = '\0';
 
-        if(!valid_playagain(atoi(buf))) {
-            printf("Por favor, digite 1 para jogar novamente ou 0 para encerrar.\n");
-            close(s);
-            exit(EXIT_FAILURE);
+            if (valid_playagain(atoi(buf))) {
+                break; // entrada válida: sai do while
+            } else {
+                printf("Por favor, digite 1 para jogar novamente ou 0 para encerrar.\n");
+            }
         }
 
         count = send(s, buf, strlen(buf) + 1, 0);
+        
         if (count != strlen(buf) + 1) {
             logexit("send");
         }
