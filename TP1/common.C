@@ -135,27 +135,3 @@ int server_sockaddr(const char *proto, const char *portstr, struct sockaddr_stor
 
     return 0; // Sucesso
 }
-
-/*
-    Descricao: Funcao que verifica se a escolha do usuario é válida
-    Argumentos: opt - opcao escolhida pelo usuario
-    Retorno: 1 se a opcao for valida, 0 se for invalida           
-*/
-int valid_move(int opt) {
-    if (opt == 0 || opt == 1 || opt == 2 || opt == 3 || opt == 4) {
-        return 1; // Valid move
-    }
-    return 0;
-}
-
-/*
-    Descricao: Funcao que verifica se a escolha do usuario para jogar novamente é válida
-    Argumentos: opt - opcao escolhida pelo usuario
-    Retorno: 1 se a opcao for valida, 0 se for invalida           
-*/
-int valid_playagain(int opt) {
-    if (opt == 0 || opt == 1) {
-        return 1; // Valid move
-    }
-    return 0;
-}

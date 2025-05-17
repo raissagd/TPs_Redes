@@ -94,40 +94,47 @@ int main (int argc, char **argv) {
     addrtostr(addr, addrstr, BUFSZ); // Converte o endereço para uma string
     printf("Conectado ao servidor.\n");
 
-    char buf[BUFSZ];    
+    // char buf[BUFSZ];    
+    GameMessage msg;
+    memset(&msg, 0, sizeof(msg));
     
     while(1) {
         print_initial_message();
-    
-        fgets(buf, BUFSZ - 1, stdin);
-        buf[strcspn(buf, "\n")] = '\0'; // remove o \n do final, se houver
-        size_t count = send(s, buf, strlen(buf) + 1, 0); // Número de bytes enviados
 
-        if(!valid_move(atoi(buf))) {
-            printf("Por favor, selecione um valor de 0 a 4.\n");
-            close(s);
-            exit(EXIT_FAILURE);
+        fgets(msg.message, MSG_SIZE - 1, stdin);
+        msg.message[strcspn(msg.message, "\n")] = '\0';
+
+        if (msg.message[0] == '\0') {
+            printf("Entrada vazia. Tente novamente.\n");
+            continue;
         }
-        
-        if(count != strlen(buf) + 1) {
+
+        msg.client_action = atoi(msg.message);
+        msg.type = MSG_RESPONSE;
+        size_t count = send(s, &msg, sizeof(msg), 0);
+
+        if(count != sizeof(msg)) {
+            // Se count for diferente de sizeof(msg), significa que houve erro no envio
             logexit("send");
         }
 
-        printf("Você escolheu: %s.\n", option_to_action(atoi(buf)));
+        memset(&msg, 0, sizeof(msg));
+        count = recv(s, &msg, sizeof(msg), 0);
 
-        memset(buf, 0, BUFSZ);
-        unsigned total = 0; // Número total de bytes recebidos	
+        if (msg.type == MSG_ERROR) {
+            printf("%s\n", msg.message);
+            continue; // Volta ao início para tentar de novo
+        }
 
-        count = recv(s, buf + total, BUFSZ - total, 0); // Adiciona os bytes recebidos ao buffer, em ordem
-        if (count ==  0) {
-            // Se count for 0, significa que o servidor fechou a conexão
+        if (count == 0) {
+            printf("Servidor fechou a conexão.\n");
             break;
         }
-        total += count;
 
-        int result, server_move;
-        sscanf(buf, "%d %d", &result, &server_move); // Lê o resultado e a jogada do servidor
+        int result = msg.result;
+        int server_move = msg.server_action;
 
+        printf("Você escolheu: %s.\n", option_to_action(msg.client_action));
         printf("Servidor escolheu: %s.\n", option_to_action(server_move));
 
         if (result == 1) {
@@ -138,30 +145,41 @@ int main (int argc, char **argv) {
             printf("Resultado: Você perdeu!\n");
         }
 
-        memset(buf, 0, BUFSZ);
-        count = recv(s, buf, BUFSZ, 0); // Recebe a pergunta do servidor se quer continuar jogando
-        printf("%s\n", buf);            
+        memset(&msg, 0, sizeof(msg));
+        count = recv(s, &msg, sizeof(msg), 0);
+        printf("%s\n", msg.message);            
 
-        fgets(buf, BUFSZ - 1, stdin);
-        buf[strcspn(buf, "\n")] = '\0';
-
-        if(!valid_playagain(atoi(buf))) {
-            // servidor vai lidar com a lógica de repetir a pergunta
-            printf("Por favor, digite 1 para jogar novamente ou 0 para encerrar.\n");
+        if (count == 0) {
+            printf("Servidor fechou a conexão.\n");
+            break;
         }
 
-        count = send(s, buf, strlen(buf) + 1, 0);
-        if (count != strlen(buf) + 1) {
+        while (1) {
+            fgets(msg.message, MSG_SIZE - 1, stdin);
+            msg.message[strcspn(msg.message, "\n")] = '\0';
+
+            if (msg.message[0] == '\0') {
+                printf("Entrada vazia. Digite 1 para jogar novamente ou 0 para sair.\n");
+                continue;
+            }
+
+            msg.client_action = atoi(msg.message);
+            break;
+        }
+
+        msg.type = MSG_PLAY_AGAIN_RESPONSE;
+
+        count = send(s, &msg, sizeof(msg), 0);
+        if (count != sizeof(msg)) {
             logexit("send");
         }
 
-        if (buf[0] == '0') {
+        if (msg.client_action == 0) {
             printf("Fim de jogo!\n");
             
-            // Recebe o placar final do servidor
-            memset(buf, 0, BUFSZ);
-            count = recv(s, buf, BUFSZ, 0);
-            printf("%s\n", buf);
+            memset(&msg, 0, sizeof(msg));
+            count = recv(s, &msg, sizeof(msg), 0);
+            printf("%s\n", msg.message);
 
             printf("Obrigada por jogar!\n");
             break;

@@ -73,6 +73,30 @@ int who_wins(int opt1, int opt2) {
     return 1; // Jogador 1 ganha
 }
 
+/*
+    Descricao: Funcao que verifica se a escolha do usuario é válida
+    Argumentos: opt - opcao escolhida pelo usuario
+    Retorno: 1 se a opcao for valida, 0 se for invalida           
+*/
+int valid_move(int opt) {
+    if (opt == 0 || opt == 1 || opt == 2 || opt == 3 || opt == 4) {
+        return 1; // Valid move
+    }
+    return 0;
+}
+
+/*
+    Descricao: Funcao que verifica se a escolha do usuario para jogar novamente é válida
+    Argumentos: opt - opcao escolhida pelo usuario
+    Retorno: 1 se a opcao for valida, 0 se for invalida           
+*/
+int valid_playagain(int opt) {
+    if (opt == 0 || opt == 1) {
+        return 1; // Valid move
+    }
+    return 0;
+}
+
 int main (int argc, char **argv) {
     if (argc < 3) {
         usage(argc, argv);
@@ -124,7 +148,9 @@ int main (int argc, char **argv) {
     addrtostr(caddr, caddrstr, BUFSZ);
     printf("Cliente conectado.\n");
 
-    char buf[BUFSZ];
+    // char buf[BUFSZ];
+    GameMessage msg;
+    memset(&msg, 0, sizeof(msg));
     
     int client_victories = 0;
     int server_victories = 0;
@@ -132,25 +158,27 @@ int main (int argc, char **argv) {
     while(1) {
         printf("Apresentando as opções para o cliente.\n");
 
-        memset(buf, 0, BUFSZ);
-        size_t count  = recv(csock, buf, BUFSZ, 0); // Número de bytes recebidos
+        memset(&msg, 0, sizeof(msg));
+        size_t count = recv(csock, &msg, sizeof(msg), 0); // Número de bytes recebidos
 
         if (count == 0) {
             // Se count for 0, significa que o cliente fechou a conexão
-           close(csock);
-            continue;
-        }
-            
-        printf("Cliente escolheu %s.\n", buf);
-
-        if(!valid_move(atoi(buf))) {
-            printf("Erro: opção inválida de jogada.\n");
             close(csock);
             continue;
         }
 
+        if(!valid_move(msg.client_action) ) {
+            printf("Erro: opção inválida de jogada.\n");
+            msg.type = MSG_ERROR;
+            snprintf(msg.message, MSG_SIZE, "Erro: jogada inválida. Escolha um valor entre 0 e 4.");
+            send(csock, &msg, sizeof(msg), 0);
+            continue; // Pergunta novamente
+        }
+
+        printf("Cliente escolheu %d.\n", msg.client_action);
+
         int server_move = pick_random_move(); // Jogada aleatória do servidor
-        int result = who_wins(atoi(buf), server_move); // Verifica quem ganhou
+        int result = who_wins(msg.client_action, server_move); // Verifica quem ganhou
 
         if (result == 1) {
             client_victories++;
@@ -162,45 +190,50 @@ int main (int argc, char **argv) {
         
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
             
-        memset(buf, 0, BUFSZ);  // Limpa o buffer antes de reutilizá-lo
-        sprintf(buf, "%d %d", result, server_move);  // Envia o resultado e a jogada do servidor
-        count = send(csock, buf, strlen(buf) + 1, 0);  
-            
-        if(count != strlen(buf) + 1) {
-            logexit("send");
-        }
+        msg.type = MSG_RESULT;
+        msg.server_action = server_move;
+        msg.result = result;
+        msg.client_wins = client_victories;
+        msg.server_wins = server_victories;
+        snprintf(msg.message, MSG_SIZE, "Servidor escolheu %d. Resultado: %d", server_move, result);
+
+        send(csock, &msg, sizeof(msg), 0);
 
         printf("Placar: Cliente %d x %d Servidor\n", client_victories, server_victories);
 
         while (1) {
             printf("Perguntando se o cliente deseja jogar novamente.\n");
             
-            memset(buf, 0, BUFSZ);
-            sprintf(buf, "Deseja jogar novamente?\n1 - Sim\n0 - Não\n");
-            send(csock, buf, strlen(buf) + 1, 0);
+            msg.type = MSG_PLAY_AGAIN_REQUEST;
+            snprintf(msg.message, MSG_SIZE, "Deseja jogar novamente?\n1 - Sim\n0 - Não\n");
+            send(csock, &msg, sizeof(msg), 0);
 
-            memset(buf, 0, BUFSZ);
-            count = recv(csock, buf, BUFSZ, 0);
+            memset(&msg, 0, sizeof(msg));
+            count = recv(csock, &msg, sizeof(msg), 0);
 
-            if (!valid_playagain(atoi(buf))) {
+            if (!valid_playagain(msg.client_action)) {
                 printf("Erro: resposta inválida para jogar novamente.\n");
-                continue; // Pergunta novamente
+                msg.type = MSG_ERROR;
+                snprintf(msg.message, MSG_SIZE, "Erro: resposta inválida. Escolha 0 ou 1.");
+                send(csock, &msg, sizeof(msg), 0);
+                continue;
             } else {
                 break; // Resposta válida
             }
         }
             
-        if (buf[0] == '0') {
+        if (msg.client_action == 0) {
             printf("Cliente não deseja jogar novamente.\n");
             printf("Enviando placar final.\n");
-
-            memset(buf, 0, BUFSZ);
-            sprintf(buf, "Placar final: Você %d x %d Servidor", client_victories, server_victories);
-            send(csock, buf, strlen(buf) + 1, 0); // Envia o placar final
+            
+            msg.type = MSG_END;
+            snprintf(msg.message, MSG_SIZE, "Placar final: Você %d x %d Servidor", client_victories, server_victories);
+            send(csock, &msg, sizeof(msg), 0);
 
             printf("Encerrando conexão.\n");
-            printf("Cliente encerrou a sessão.\n");
             break;
+        } else {
+            printf("Cliente deseja jogar novamente.\n");
         }
     }
     
