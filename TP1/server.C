@@ -161,8 +161,6 @@ int main (int argc, char **argv) {
         }
         
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
-
-        //printf("Placar: Cliente %d x %d Servidor\n", result == 1 ? 0 : (result == -1 ? 1 : 0), result == -1 ? 0 : (result == 1 ? 1 : 0));
             
         memset(buf, 0, BUFSZ);  // Limpa o buffer antes de reutilizá-lo
         sprintf(buf, "%d %d", result, server_move);  // Envia o resultado e a jogada do servidor
@@ -174,16 +172,25 @@ int main (int argc, char **argv) {
 
         printf("Placar: Cliente %d x %d Servidor\n", client_victories, server_victories);
 
-        // Espera resposta do cliente se deseja jogar de novo
-        printf("Perguntando se o cliente deseja jogar novamente.\n");
-        memset(buf, 0, BUFSZ);
-        count = recv(csock, buf, BUFSZ, 0);
+        while (1) {
+            printf("Perguntando se o cliente deseja jogar novamente.\n");
+            
+            memset(buf, 0, BUFSZ);
+            sprintf(buf, "Deseja jogar novamente?\n1 - Sim\n0 - Não\n");
+            send(csock, buf, strlen(buf) + 1, 0);
 
-        if(!valid_playagain(atoi(buf))) {
-            printf("Erro: resposta inválida para jogar novamente.\n");
+            memset(buf, 0, BUFSZ);
+            count = recv(csock, buf, BUFSZ, 0);
+
+            if (!valid_playagain(atoi(buf))) {
+                printf("Erro: resposta inválida para jogar novamente.\n");
+                continue; // Pergunta novamente
+            } else {
+                break; // Resposta válida
+            }
         }
             
-        if (count <= 0 || buf[0] == '0') {
+        if (buf[0] == '0') {
             printf("Cliente não deseja jogar novamente.\n");
             printf("Enviando placar final.\n");
 

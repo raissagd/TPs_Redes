@@ -48,17 +48,6 @@ void print_initial_message() {
 }
 
 /*
-    Descricao: Funcao que printa no terminal do cliente se ele deseja jogar novamente
-    Argumentos: nenhum
-    Retorno: Nao possui
-*/
-void print_playagain_message() {
-    printf("Deseja jogar novamente?\n");
-    printf("1 - Sim\n");
-    printf("0 - Não\n");
-}
-
-/*
     Descricao: Funcao que passa a jogada do usuario de inteiro para seu respectivo nome
     Argumentos: opt - opcao escolhida pelo usuario
     Retorno: string com o nome da jogada
@@ -149,22 +138,21 @@ int main (int argc, char **argv) {
             printf("Resultado: Você perdeu!\n");
         }
 
-        while (1) {
-            print_playagain_message();
-            fgets(buf, BUFSZ - 1, stdin);
-            buf[strcspn(buf, "\n")] = '\0';
+        memset(buf, 0, BUFSZ);
+        count = recv(s, buf, BUFSZ, 0); // Recebe a pergunta do servidor se quer continuar jogando
+        printf("%s\n", buf);            
 
-            count = send(s, buf, strlen(buf) + 1, 0);
-        
-            if (count != strlen(buf) + 1) {
-                logexit("send");
-            }
+        fgets(buf, BUFSZ - 1, stdin);
+        buf[strcspn(buf, "\n")] = '\0';
 
-            if (valid_playagain(atoi(buf))) {
-                break; // entrada válida: sai do while
-            } else {
-                printf("Por favor, digite 1 para jogar novamente ou 0 para encerrar.\n");
-            }
+        if(!valid_playagain(atoi(buf))) {
+            // servidor vai lidar com a lógica de repetir a pergunta
+            printf("Por favor, digite 1 para jogar novamente ou 0 para encerrar.\n");
+        }
+
+        count = send(s, buf, strlen(buf) + 1, 0);
+        if (count != strlen(buf) + 1) {
+            logexit("send");
         }
 
         if (buf[0] == '0') {
