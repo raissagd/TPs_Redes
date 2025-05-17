@@ -97,6 +97,36 @@ int valid_playagain(int opt) {
     return 0;
 }
 
+/*
+    Descricao: Funcao que passa a jogada do usuario de inteiro para seu respectivo nome
+    Argumentos: opt - opcao escolhida pelo usuario
+    Retorno: string com o nome da jogada
+*/
+const char* option_to_action(int opt) {
+    switch (opt) {
+        case 0: return "Nuclear Attack";
+        case 1: return "Intercept Attack";
+        case 2: return "Cyber Attack";
+        case 3: return "Drone Strike";
+        case 4: return "Bio Attack";
+        default: return "Invalid Option";
+    }
+}
+
+/*
+    Descricao: Funcao que passa o resultado do jogo de inteiro para string
+    Argumentos: result - resultado do jogo
+    Retorno: string com o resultado do jogo
+*/
+const char* print_result(int result) {
+    switch (result) {
+        case 1: return "Vitória!";
+        case 0: return "Empate!";
+        case -1: return "Derrota!";
+        default: return "Invalid Option";
+    }
+}
+
 int main (int argc, char **argv) {
     if (argc < 3) {
         usage(argc, argv);
@@ -156,7 +186,15 @@ int main (int argc, char **argv) {
     int server_victories = 0;
         
     while(1) {
+        // -------------------------------- Servidor envia mensagem para o cliente -------------------------------------
         printf("Apresentando as opções para o cliente.\n");
+
+        msg.type = MSG_REQUEST;
+        snprintf(msg.message, MSG_SIZE, "Escolha sua jogada:\n0 - Nuclear Attack\n1 - Intercept Attack\n2 - Cyber Attack\n3 - Drone Strike\n4 - Bio Attack");
+
+        send(csock, &msg, sizeof(msg), 0);
+        
+        // -------------------------------- Servidor recebe a jogada do cliente -------------------------------------
 
         memset(&msg, 0, sizeof(msg));
         size_t count = recv(csock, &msg, sizeof(msg), 0); // Número de bytes recebidos
@@ -177,6 +215,8 @@ int main (int argc, char **argv) {
 
         printf("Cliente escolheu %d.\n", msg.client_action);
 
+        // -------------------------------- Servidor processa a jogada do cliente e envia o resultado -------------------------------------
+
         int server_move = pick_random_move(); // Jogada aleatória do servidor
         int result = who_wins(msg.client_action, server_move); // Verifica quem ganhou
 
@@ -195,11 +235,13 @@ int main (int argc, char **argv) {
         msg.result = result;
         msg.client_wins = client_victories;
         msg.server_wins = server_victories;
-        snprintf(msg.message, MSG_SIZE, "Servidor escolheu %d. Resultado: %d", server_move, result);
+        snprintf(msg.message, MSG_SIZE, "Você escolheu: %s.\nServidor escolheu %s.\nResultado: %s", option_to_action(msg.client_action), option_to_action(server_move), print_result(result));
 
         send(csock, &msg, sizeof(msg), 0);
 
         printf("Placar: Cliente %d x %d Servidor\n", client_victories, server_victories);
+
+        // -------------------------------- Servidor pergunta se o cliente quer jogar novamente -------------------------------------
 
         while (1) {
             printf("Perguntando se o cliente deseja jogar novamente.\n");
@@ -221,6 +263,8 @@ int main (int argc, char **argv) {
                 break; // Resposta válida
             }
         }
+
+        // -------------------------------- Servidor recebe a resposta do cliente -------------------------------------
             
         if (msg.client_action == 0) {
             printf("Cliente não deseja jogar novamente.\n");
