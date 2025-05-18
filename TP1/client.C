@@ -91,9 +91,10 @@ int main (int argc, char **argv) {
         fgets(msg.message, MSG_SIZE - 1, stdin);
         msg.message[strcspn(msg.message, "\n")] = '\0';
 
-        if (msg.message[0] == '\0') {
+        while(msg.message[0] == '\0') {
             printf("Entrada vazia. Tente novamente.\n");
-            continue;
+            fgets(msg.message, MSG_SIZE - 1, stdin);
+            msg.message[strcspn(msg.message, "\n")] = '\0';
         }
 
         msg.client_action = atoi(msg.message);
@@ -121,6 +122,10 @@ int main (int argc, char **argv) {
         }
 
         printf("%s\n", msg.message); 
+
+        if (msg.result == 0) {
+            continue; // Se o jogo empatou, pergunta novamente
+        }
 
         // -------------------------------- Cliente recebe a mensagem se quer jogar -------------------------------------
 
@@ -158,6 +163,8 @@ int main (int argc, char **argv) {
         if (msg.client_action == 0) {
             printf("Fim de jogo!\n");
             
+            // -------------------------------- Cliente recebe a mensagem de fim de jogo-------------------------------------
+
             memset(&msg, 0, sizeof(msg));
             count = recv(s, &msg, sizeof(msg), 0);
             printf("%s\n", msg.message);
