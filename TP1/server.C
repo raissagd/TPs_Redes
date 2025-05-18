@@ -222,6 +222,7 @@ int main (int argc, char **argv) {
             server_victories++;
         } else {
             printf("Jogo empatado.\n");
+            printf("Solicitando ao cliente mais uma escolha.\n");
         }
         
         printf("Cliente escolheu %d.\n", msg.client_action);
