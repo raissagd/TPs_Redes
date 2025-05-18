@@ -190,8 +190,7 @@ int main (int argc, char **argv) {
         printf("Apresentando as opções para o cliente.\n");
 
         msg.type = MSG_REQUEST;
-        snprintf(msg.message, MSG_SIZE,
-                "Escolha sua jogada:\n0 - Nuclear Attack\n1 - Intercept Attack\n2 - Cyber Attack\n3 - Drone Strike\n4 - Bio Attack");
+        snprintf(msg.message, MSG_SIZE, "Escolha sua jogada:\n0 - Nuclear Attack\n1 - Intercept Attack\n2 - Cyber Attack\n3 - Drone Strike\n4 - Bio Attack");
 
         send(csock, &msg, sizeof(msg), 0);
         
@@ -214,8 +213,6 @@ int main (int argc, char **argv) {
             continue; // Pergunta novamente
         }
 
-        printf("Cliente escolheu %d.\n", msg.client_action);
-
         int server_move = pick_random_move(); // Jogada aleatória do servidor
         int result = who_wins(msg.client_action, server_move); // Verifica quem ganhou
 
@@ -227,6 +224,7 @@ int main (int argc, char **argv) {
             printf("Jogo empatado.\n");
         }
         
+        printf("Cliente escolheu %d.\n", msg.client_action);
         printf("Servidor escolheu aleatoriamente %d.\n", server_move);
 
         // -------------------------------- Servidor envia o resultado para o cliente -------------------------------------

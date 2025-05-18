@@ -127,7 +127,7 @@ int main (int argc, char **argv) {
             continue; // Se o jogo empatou, pergunta novamente
         }
 
-        // -------------------------------- Cliente recebe a mensagem se quer jogar -------------------------------------
+        // -------------------------------- Cliente recebe a mensagem se quer jogar de novo -------------------------------------
 
         memset(&msg, 0, sizeof(msg));
         count = recv(s, &msg, sizeof(msg), 0);
