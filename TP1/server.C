@@ -144,6 +144,12 @@ int main (int argc, char **argv) {
         logexit("socket");
     }
 
+    // Permite reutilizar o endereço local
+    int yes = 1;
+    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) < 0) {
+        logexit("setsockopt");
+    }
+
     // Faz o bind (vincula o socket ao IP/porta)
     struct sockaddr *addr = (struct sockaddr *)&storage;
     if (0 != bind(s, addr, sizeof(storage))) {
