@@ -44,29 +44,34 @@ int pick_random_move() {
     return move;
 }
 
+/*
+    Descricao: Funcao que verifica quem ganhou o jogo
+    Argumentos: opt1 - opcao escolhida pelo jogador
+               opt2 - opcao escolhida pelo servidor
+    Retorno: 1 se o jogador 1 ganhar, 0 se empatar, -1 se o servidor ganhar         
+*/
 int who_wins(int opt1, int opt2) {
     /*
-    0 - Nuclear Attack
-    1 - Intercept Attack
-    2 - Cyber Attack
-    3 - Drone Strike
-    4 - Bio Attack
-
     Resultados:
     1  - Vitória do Jogador 1
     0  - Empate
     -1 - Vitória do Jogador 2
     */
+    int nuclear_attack = 0;
+    int intercept_attack = 1;
+    int cyber_attack = 2;
+    int drone_strike = 3;
+    int bio_attack = 4;
 
     if (opt1 == opt2) {
         return 0; // Empate
     }
 
-    if ((opt1 == 0 && (opt2 == 1 || opt2 == 4)) ||
-        (opt1 == 1 && (opt2 == 2 || opt2 == 3)) ||
-        (opt1 == 2 && (opt2 == 0 || opt2 == 4)) ||
-        (opt1 == 3 && (opt2 == 0 || opt2 == 2)) ||
-        (opt1 == 4 && (opt2 == 1 || opt2 == 3))) {
+    if ((opt1 == nuclear_attack && (opt2 == intercept_attack || opt2 == bio_attack)) ||
+        (opt1 == intercept_attack && (opt2 == cyber_attack || opt2 == drone_strike)) ||
+        (opt1 == cyber_attack && (opt2 == nuclear_attack || opt2 == bio_attack)) ||
+        (opt1 == drone_strike && (opt2 == nuclear_attack || opt2 == cyber_attack)) ||
+        (opt1 == bio_attack && (opt2 == intercept_attack || opt2 == drone_strike))) {
         return -1; // Jogador 1 perde
     }
 
@@ -261,7 +266,7 @@ int main (int argc, char **argv) {
                 printf("Perguntando se o cliente deseja jogar novamente.\n");
                 
                 msg.type = MSG_PLAY_AGAIN_REQUEST;
-                snprintf(msg.message, MSG_SIZE, "Deseja jogar novamente?\n1 - Sim\n0 - Não\n");
+                snprintf(msg.message, MSG_SIZE, "Deseja jogar novamente?\n1 - Sim\n0 - Não");
                 send(csock, &msg, sizeof(msg), 0);
 
                 // -------------------------------- Servidor recebe a resposta do cliente -------------------------------------
@@ -285,6 +290,8 @@ int main (int argc, char **argv) {
                 printf("Enviando placar final.\n");
                 
                 msg.type = MSG_END;
+                msg.client_wins = client_victories;
+                msg.server_wins = server_victories;
                 snprintf(msg.message, MSG_SIZE, "Placar final: Você %d x %d Servidor", client_victories, server_victories);
                 send(csock, &msg, sizeof(msg), 0);
 

@@ -92,7 +92,7 @@ int main (int argc, char **argv) {
         msg.message[strcspn(msg.message, "\n")] = '\0';
 
         while(msg.message[0] == '\0') {
-            printf("Entrada vazia. Tente novamente.\n");
+            printf("Erro: jogada inválida. Escolha um valor entre 0 e 4.\n");
             fgets(msg.message, MSG_SIZE - 1, stdin);
             msg.message[strcspn(msg.message, "\n")] = '\0';
         }
@@ -145,7 +145,7 @@ int main (int argc, char **argv) {
             msg.message[strcspn(msg.message, "\n")] = '\0';
 
             if (msg.message[0] == '\0') {
-                printf("Entrada vazia. Digite 1 para jogar novamente ou 0 para sair.\n");
+                printf("Erro: resposta inválida. Escolha 0 ou 1.\n");
                 continue;
             }
 
