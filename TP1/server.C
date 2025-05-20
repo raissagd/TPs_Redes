@@ -208,7 +208,7 @@ int main (int argc, char **argv) {
             
             if (count == 0) {
                 // Se count for 0, significa que o cliente fechou a conexão
-                printf("Cliente fechou a conexão.\n");
+                printf("Cliente desconectado.\n");
                 close(csock);
                 break; // Sai do loop
             }
@@ -228,9 +228,6 @@ int main (int argc, char **argv) {
                 client_victories++;
             } else if (result == -1) {
                 server_victories++;
-            } else {
-                printf("Jogo empatado.\n");
-                printf("Solicitando ao cliente mais uma escolha.\n");
             }
             
             printf("Cliente escolheu %d.\n", msg.client_action);
@@ -247,7 +244,12 @@ int main (int argc, char **argv) {
 
             send(csock, &msg, sizeof(msg), 0);
 
-            printf("Placar: Cliente %d x %d Servidor\n", client_victories, server_victories);
+            if(result == 0) {
+                printf("Jogo empatado.\n");
+                printf("Solicitando ao cliente mais uma escolha.\n");
+            } else {
+                printf("Placar atualizado: Cliente %d x %d Servidor\n", client_victories, server_victories);
+            }
 
             if (result == 0) {
                 continue; // Se o jogo empatou, pergunta novamente
@@ -287,6 +289,7 @@ int main (int argc, char **argv) {
                 send(csock, &msg, sizeof(msg), 0);
 
                 printf("Encerrando conexão.\n");
+                printf("Cliente desconectado.\n");
                 break;
             } else {
                 printf("Cliente deseja jogar novamente.\n");

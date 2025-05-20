@@ -169,7 +169,7 @@ int main (int argc, char **argv) {
             count = recv(s, &msg, sizeof(msg), 0);
             printf("%s\n", msg.message);
 
-            printf("Obrigada por jogar!\n");
+            printf("Obrigado por jogar!\n");
             break;
         }
     }
