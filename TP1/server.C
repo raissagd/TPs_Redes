@@ -53,9 +53,9 @@ int pick_random_move() {
 int who_wins(int opt1, int opt2) {
     /*
     Resultados:
-    1  - Vitória do Jogador 1
+    1  - Vitória do Jogador
     0  - Empate
-    -1 - Vitória do Jogador 2
+    -1 - Vitória do Servidor
     */
     int nuclear_attack = 0;
     int intercept_attack = 1;
@@ -72,10 +72,10 @@ int who_wins(int opt1, int opt2) {
         (opt1 == cyber_attack && (opt2 == nuclear_attack || opt2 == bio_attack)) ||
         (opt1 == drone_strike && (opt2 == nuclear_attack || opt2 == cyber_attack)) ||
         (opt1 == bio_attack && (opt2 == intercept_attack || opt2 == drone_strike))) {
-        return -1; // Jogador 1 perde
+        return -1; // Jogador perde
     }
 
-    return 1; // Jogador 1 ganha
+    return 1; // Jogador ganha
 }
 
 /*
@@ -252,12 +252,9 @@ int main (int argc, char **argv) {
             if(result == 0) {
                 printf("Jogo empatado.\n");
                 printf("Solicitando ao cliente mais uma escolha.\n");
+                continue; // Se o jogo empatou, pergunta novamente
             } else {
                 printf("Placar atualizado: Cliente %d x %d Servidor\n", client_victories, server_victories);
-            }
-
-            if (result == 0) {
-                continue; // Se o jogo empatou, pergunta novamente
             }
 
             // -------------------------------- Servidor pergunta se o cliente quer jogar novamente -------------------------------------
@@ -292,7 +289,7 @@ int main (int argc, char **argv) {
                 msg.type = MSG_END;
                 msg.client_wins = client_victories;
                 msg.server_wins = server_victories;
-                snprintf(msg.message, MSG_SIZE, "Placar final: Você %d x %d Servidor", client_victories, server_victories);
+                snprintf(msg.message, MSG_SIZE, "Fim de jogo!\nPlacar final: Você %d x %d Servidor\nObrigado por jogar!", client_victories, server_victories);
                 send(csock, &msg, sizeof(msg), 0);
 
                 printf("Encerrando conexão.\n");
@@ -303,6 +300,7 @@ int main (int argc, char **argv) {
             }
         }
     }
+    close(s);
 
     exit(EXIT_SUCCESS);
 }

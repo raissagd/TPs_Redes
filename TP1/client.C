@@ -84,13 +84,14 @@ int main (int argc, char **argv) {
             continue; // Volta ao início para tentar de novo
         }
 
-        printf("%s\n", msg.message);
+        printf("%s\n", msg.message); // Exibe a mensagem do servidor
 
         // -------------------------------- Cliente envia a jogada -------------------------------------
         
         fgets(msg.message, MSG_SIZE - 1, stdin);
         msg.message[strcspn(msg.message, "\n")] = '\0';
 
+        // Esse é o único tipo de validação que o cliente faz, pois o atoi converte uma string vazia para 0, o que seria uma jogada válida do ponto de vista do servidor.
         while(msg.message[0] == '\0') {
             printf("Erro: jogada inválida. Escolha um valor entre 0 e 4.\n");
             fgets(msg.message, MSG_SIZE - 1, stdin);
@@ -124,7 +125,7 @@ int main (int argc, char **argv) {
         printf("%s\n", msg.message); 
 
         if (msg.result == 0) {
-            continue; // Se o jogo empatou, pergunta novamente
+            continue; // Se o jogo empatou, servidor manda mensagem de novo para escolher uma jogada
         }
 
         // -------------------------------- Cliente recebe a mensagem se quer jogar de novo -------------------------------------
@@ -144,6 +145,7 @@ int main (int argc, char **argv) {
             fgets(msg.message, MSG_SIZE - 1, stdin);
             msg.message[strcspn(msg.message, "\n")] = '\0';
 
+            // Esse é o único tipo de validação que o cliente faz, pois o atoi converte uma string vazia para 0, o que seria uma jogada válida do ponto de vista do servidor.
             if (msg.message[0] == '\0') {
                 printf("Erro: resposta inválida. Escolha 0 ou 1.\n");
                 continue;
@@ -161,15 +163,10 @@ int main (int argc, char **argv) {
         }
 
         if (msg.client_action == 0) {
-            printf("Fim de jogo!\n");
-            
             // -------------------------------- Cliente recebe a mensagem de fim de jogo-------------------------------------
-
             memset(&msg, 0, sizeof(msg));
             count = recv(s, &msg, sizeof(msg), 0);
             printf("%s\n", msg.message);
-
-            printf("Obrigado por jogar!\n");
             break;
         }
     }
