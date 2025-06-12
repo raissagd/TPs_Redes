@@ -16,25 +16,15 @@ Matricula: 2022055823
 
 #define MSG_SIZE 256
 
-typedef enum {
-    MSG_REQUEST,
-    MSG_RESPONSE,
-    MSG_RESULT,
-    MSG_PLAY_AGAIN_REQUEST,
-    MSG_PLAY_AGAIN_RESPONSE,
-    MSG_ERROR,
-    MSG_END
-} MessageType;
+#define STR_LEN 11
 
-typedef struct {
-    int type;              
-    int client_action;     // (0 a 4)
-    int server_action;     // (0 a 4)
-    int result;            // Resultado: 1 (vitória cliente), 0 (empate), -1 (vitória servidor)
-    int client_wins;       
-    int server_wins;       
-    char message[MSG_SIZE];
-} GameMessage;
+typedef struct{
+    int32_t player_id;
+    float value;
+    char type[STR_LEN];
+    float player_profit;
+    float house_profit;
+} aviator_msg ;
 
 void logexit (const char *msg);
 
