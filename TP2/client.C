@@ -21,17 +21,32 @@ Matricula: 2022055823
 #include <arpa/inet.h>
 
 void usage (int argc, char **argv) {
-    printf("Usage: %s <server IP> <server port>\n", argv[0]);
-    printf("Example: %s 127.0.0.1 51511\n", argv[0]);
+    //printf("Usage: %s <server IP> <server port>\n", argv[0]);
+    //printf("Example: %s 127.0.0.1 51511\n", argv[0]);
+    printf("Usage: %s <server IP> <server port> -nick <nickname>\n", argv[0]);
+    printf("Example: %s 127.0.0.1 51511 -nick Flip\n", argv[0]);
     exit(EXIT_FAILURE);
 }
 
 #define BUFSZ 1024
 
 int main (int argc, char **argv) {
-    // Verifica se os argumentos necessários foram fornecidos
-    if (argc < 3) {
+    // Verifica se foram fornecidos o número correto de argumentos
+    if (argc != 5) {
+        fprintf(stderr, "Error: Invalid number of arguments.\n");
+        //usage(argc, argv);
+    }
+
+    // Valida se tem a flag -nick
+    if (strcmp(argv[3], "-nick") != 0) {
+        fprintf(stderr, "Error: Invalid flag. Expected '-nick'.\n", argv[3]);
         usage(argc, argv);
+    }
+
+    // Validação do tamanho do nickname
+    if (strlen(argv[4]) > 13) {
+        fprintf(stderr, "Error: Nickname too long (max 13).\n");
+        exit(EXIT_FAILURE);
     }
 
     struct sockaddr_storage storage;
