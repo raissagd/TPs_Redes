@@ -14,6 +14,7 @@ Matricula: 2022055823
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h> 
 #include <unistd.h>
 
 #include <sys/types.h>
@@ -33,19 +34,19 @@ void usage (int argc, char **argv) {
 int main (int argc, char **argv) {
     // Verifica se foram fornecidos o número correto de argumentos
     if (argc != 5) {
-        fprintf(stderr, "Error: Invalid number of arguments.\n");
+        fprintf(stderr, "Error: Invalid number of arguments\n");
         //usage(argc, argv);
     }
 
     // Valida se tem a flag -nick
     if (strcmp(argv[3], "-nick") != 0) {
-        fprintf(stderr, "Error: Invalid flag. Expected '-nick'.\n", argv[3]);
+        fprintf(stderr, "Error: Invalid flag. Expected '-nick'\n");
         usage(argc, argv);
     }
 
     // Validação do tamanho do nickname
     if (strlen(argv[4]) > 13) {
-        fprintf(stderr, "Error: Nickname too long (max 13).\n");
+        fprintf(stderr, "Error: Nickname too long (max 13)\n");
         exit(EXIT_FAILURE);
     }
 
@@ -71,22 +72,44 @@ int main (int argc, char **argv) {
     char addrstr[BUFSZ];
     addrtostr(addr, addrstr, BUFSZ);
 
-    printf("Connected to %s\n", addrstr);
-    printf("Digite mensagens para enviar.\n");
+    //printf("Connected to %s\n", addrstr);
+    printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (X) segundos restantes):\n");
 
     aviator_msg send_msg;
     aviator_msg recv_msg;
     char input_buf[BUFSZ];
     
     while(1) {
-        printf("> ");
         if (fgets(input_buf, BUFSZ, stdin) == NULL) {
             break; 
         }
 
-        // Prepara a mensagem para enviar
+        input_buf[strcspn(input_buf, "\n")] = 0; // Remove o caractere de nova linha
+
+        if (strcmp(input_buf, "Q") == 0) {
+            // Usuário quer sair
+            break;
+        }
+
+        if (isalpha(input_buf[0])) {
+            // Se for uma letra, tem que ser Q
+            fprintf(stderr, "Error: Invalid command\n");
+            continue;
+        }
+
+        float bet_value;
+        char trailing_char;
+        
+        if (sscanf(input_buf, "%f%c", &bet_value, &trailing_char) != 1 || bet_value <= 0) {
+            // A aposta tem que ser um número maior que zero
+            fprintf(stderr, "Error: Invalid bet value\n");
+            continue; 
+        }
+
+        // Se tudo tá ok, envia a aposta para o servidor
         memset(&send_msg, 0, sizeof(aviator_msg)); 
-        sscanf(input_buf, "%s %f", send_msg.type, &send_msg.value);
+        strcpy(send_msg.type, "bet");
+        send_msg.value = bet_value;
 
         // Envia a mensagem para o servidor
         if(send(s, &send_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
@@ -107,6 +130,6 @@ int main (int argc, char **argv) {
     }
 
     close(s);
-    printf("\nCliente encerrado.\n");
+    printf("Aposte com responsabilidade. A plataforma é nova e tá com horário bugado.\nVolte logo, %s!\n", argv[4]);
     exit(EXIT_SUCCESS);
 }
