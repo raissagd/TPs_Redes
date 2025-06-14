@@ -13,7 +13,7 @@ $(BIN_DIR)/client: client.C $(OBJ_DIR)/common.o | $(BIN_DIR)
 	gcc -Wall client.C $(OBJ_DIR)/common.o -o $(BIN_DIR)/client
 
 $(BIN_DIR)/server: server.C $(OBJ_DIR)/common.o | $(BIN_DIR)
-	gcc -Wall server.C $(OBJ_DIR)/common.o -o $(BIN_DIR)/server
+	gcc -Wall server.C obj/common.o -lpthread -o bin/server
 
 clean:
 	rm -rf $(BIN_DIR) $(OBJ_DIR)

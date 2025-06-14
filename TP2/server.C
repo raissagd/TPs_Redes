@@ -21,6 +21,13 @@ Matricula: 2022055823
 #include <sys/socket.h>
 
 #define BUFSZ 1024
+int32_t next_player_id  = 1; // Variável global para ID do jogador
+
+// Struct para passar argumentos para a thread do cliente.
+typedef struct {
+    int client_socket;
+    int32_t player_id;
+} thread_args_t;
 
 void usage (int argc, char **argv) {
     printf("Usage: %s <v4|v6> <server port>\n", argv[0]);
@@ -29,10 +36,12 @@ void usage (int argc, char **argv) {
 }
 
 // Função que será executada por cada thread
-void * client_thread_handler(void *socket_desc_ptr) {
-    // Extrai o descritor do socket do argumento e libera a memória
-    int csock = *(int*)socket_desc_ptr;
-    free(socket_desc_ptr);
+void * client_thread_handler(void *args_ptr) {
+    // Extrai os argumentos (socket e player_id) e libera a memória da struct
+    thread_args_t *args = (thread_args_t *)args_ptr;
+    int csock = args->client_socket;
+    int32_t player_id = args->player_id;
+    free(args_ptr);
 
     char caddrstr[BUFSZ];
     struct sockaddr_storage cstorage;
@@ -42,24 +51,29 @@ void * client_thread_handler(void *socket_desc_ptr) {
     // Obtém informações do cliente conectado para log
     getpeername(csock, caddr, &caddrlen);
     addrtostr(caddr, caddrstr, BUFSZ);
-    printf("Thread de cliente iniciada para %s\n", caddrstr);
+    printf("Thread de cliente iniciada para %s | Player ID: %d\n", caddrstr, player_id);
 
-    // Lógica de comunicação com o cliente dentro de um loop
-    char buf[BUFSZ];
+    // Lógica de comunicação com o cliente
+    aviator_msg msg;
     size_t count;
-    while((count = recv(csock, buf, BUFSZ - 1, 0)) > 0) {
-        buf[count] = '\0'; // Garante que a string seja terminada
-        printf("[msg] %s, %d bytes: %s", caddrstr, (int)count, buf);
-        
-        // Ecoa a mesma mensagem de volta para o cliente
-        if((size_t)send(csock, buf, count, 0) != count) {
-            logexit("send");
+    while((count = recv(csock, &msg, sizeof(aviator_msg), 0)) > 0) {
+        // Garante que uma struct completa foi recebida
+        if (count == sizeof(aviator_msg)) {
+            // NOVO: Atribui o ID do jogador à mensagem recebida
+            msg.player_id = player_id;
+
+            printf("[msg from player %d] type: %s, value: %.2f\n", msg.player_id, msg.type, msg.value);
+
+            // Ecoa a mesma mensagem (agora com o ID) de volta para o cliente
+            if(send(csock, &msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
+                logexit("send");
+            }
         }
     }
-    
+
     close(csock);
-    printf("Conexão com %s encerrada.\n", caddrstr);
-    
+    printf("Conexão com player %d (%s) encerrada.\n", player_id, caddrstr);
+
     return NULL;
 }
 
@@ -102,7 +116,7 @@ int main (int argc, char **argv) {
     char addrstr[BUFSZ];
     // Converte o endereço do servidor para string e exibe
     addrtostr(addr, addrstr, BUFSZ);
-    printf("Bound to %s, waiting connections\n", addrstr);
+    //printf("Bound to %s, waiting connections\n", addrstr);
 
     while(1) {
         struct sockaddr_storage cstorage;
@@ -120,15 +134,19 @@ int main (int argc, char **argv) {
         printf("Accepted connection from %s\n", caddrstr);
         
         pthread_t thread_id;
-        // Aloca memória para passar o descritor do socket ao thread
-        int *p_csock = (int *)malloc(sizeof(int));
-        *p_csock = csock;
+        // Aloca memória para os argumentos da thread (socket + player_id)
+        thread_args_t *args = (thread_args_t *)malloc(sizeof(thread_args_t));
+        if (!args) {
+            logexit("malloc");
+        }
+        args->client_socket = csock;
+        args->player_id = next_player_id++; // Atribui o ID atual e incrementa para o próximo
 
-        // Cria uma nova thread para atender o cliente
-        if (pthread_create(&thread_id, NULL, client_thread_handler, p_csock) < 0) {
+        // Cria uma nova thread para atender o cliente, passando a struct de argumentos
+        if (pthread_create(&thread_id, NULL, client_thread_handler, args) < 0) {
             logexit("could not create thread");
         }
-        
+
         pthread_detach(thread_id); // Libera recursos da thread automaticamente ao terminar
     }
 

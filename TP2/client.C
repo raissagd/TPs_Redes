@@ -57,32 +57,38 @@ int main (int argc, char **argv) {
     addrtostr(addr, addrstr, BUFSZ);
 
     printf("Connected to %s\n", addrstr);
-    printf("Digite mensagens para enviar. Pressione Ctrl+D ou Ctrl+C para sair.\n");
+    printf("Digite mensagens para enviar.\n");
 
-    char send_buf[BUFSZ];
-    char recv_buf[BUFSZ];
+    aviator_msg send_msg;
+    aviator_msg recv_msg;
+    char input_buf[BUFSZ];
     
     while(1) {
         printf("> ");
-        if (fgets(send_buf, BUFSZ, stdin) == NULL) {
+        if (fgets(input_buf, BUFSZ, stdin) == NULL) {
             break; 
         }
 
+        // Prepara a mensagem para enviar
+        memset(&send_msg, 0, sizeof(aviator_msg)); 
+        sscanf(input_buf, "%s %f", send_msg.type, &send_msg.value);
+
         // Envia a mensagem para o servidor
-        size_t sent_count = send(s, send_buf, strlen(send_buf), 0);
-        if(sent_count != strlen(send_buf)) {
+        if(send(s, &send_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
             logexit("send");
         }
 
-        // Recebe o eco do servidor
-        memset(recv_buf, 0, BUFSZ);
-        size_t recv_count = recv(s, recv_buf, BUFSZ - 1, 0);
+        // Recebe a mensagem do servidor
+        size_t recv_count = recv(s, &recv_msg, sizeof(aviator_msg), 0);
         if (recv_count <= 0) {
             printf("\nConexão encerrada pelo servidor.\n");
             break;
         }
 
-        printf("Eco: %s", recv_buf);
+        // Imprime os dados recebidos da struct
+        printf("Eco -> ID: %d, Type: %s, Value: %.2f, Player Profit: %.2f, House Profit: %.2f\n", 
+               recv_msg.player_id, recv_msg.type, recv_msg.value, recv_msg.player_profit, recv_msg.house_profit);
+        
     }
 
     close(s);
