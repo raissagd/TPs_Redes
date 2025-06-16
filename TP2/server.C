@@ -17,6 +17,7 @@ Matricula: 2022055823
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <math.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -35,6 +36,11 @@ int connected_clients[MAX_CLIENTS];
 int num_clients = 0;
 pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex para proteger array de clientes
 
+// Variáveis para armazenar apostas da rodada atual
+float round_bets[MAX_CLIENTS];
+int round_bet_count = 0;
+pthread_mutex_t bets_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 // Struct para passar argumentos para a thread do cliente.
 typedef struct {
     int client_socket;
@@ -45,6 +51,23 @@ void usage (int argc, char **argv) {
     printf("Usage: %s <v4|v6> <server port>\n", argv[0]);
     printf("Example: %s v4 51511\n", argv[0]);
     exit(EXIT_FAILURE);
+}
+
+/*
+ Calcula o ponto de explosão (multiplier) baseado nas apostas dos jogadores
+ */
+float calculate_explosion_point(int num_players, float bets[]) {
+    float total_bets = 0.0f;
+    
+    // Calcula o somatório das apostas
+    for (int i = 0; i < num_players; i++) {
+        total_bets += bets[i];
+    }
+    
+    // Aplica a fórmula: m_e = sqrt(1 + N + 0.01 * sum(A_i))
+    float explosion_point = sqrtf(1.0f + (float)num_players + 0.01f * total_bets);
+    
+    return explosion_point;
 }
 
 // Função para adicionar cliente ao array de clientes conectados
@@ -75,10 +98,25 @@ void remove_client(int socket_cliente) {
 
 // Função para notificar todos os clientes conectados que as apostas foram encerradas
 void notify_timeout() {
+    float explosion_point = 0.0;
+    
+    // Calcula o ponto de explosão se houver apostas
+    pthread_mutex_lock(&bets_mutex);
+    if (round_bet_count > 0) {
+        explosion_point = calculate_explosion_point(round_bet_count, round_bets);
+    }
+    
+    // Reseta as apostas para a próxima rodada
+    round_bet_count = 0;
+    memset(round_bets, 0, sizeof(round_bets));
+    pthread_mutex_unlock(&bets_mutex);
+    
+    printf("Ponto de explosão calculado: %.2f\n", explosion_point);
+    
     aviator_msg msg_encerramento;
     memset(&msg_encerramento, 0, sizeof(aviator_msg));
     strcpy(msg_encerramento.type, "round_ended");
-    msg_encerramento.value = 0.0;
+    msg_encerramento.value = explosion_point; // Envia o ponto de explosão
     msg_encerramento.player_id = 0;
     msg_encerramento.player_profit = 0.0;
     msg_encerramento.house_profit = 0.0;
@@ -92,18 +130,22 @@ void notify_timeout() {
 
 // Thread que controla o tempo da rodada
 void* countdown_thread(void* arg) {
-    sleep(COUNTDOWN_TIME); // Espera o tempo da rodada
+    sleep(COUNTDOWN_TIME);
     
     pthread_mutex_lock(&round_mutex);
     if (round_active == 1) {
         round_active = 2;
         printf("Apostas encerradas! Não é mais possível apostar nesta rodada.\n");
-        notify_timeout(); // Notifica todos os clientes
+        notify_timeout();
+        
+        // ADICIONAR: Reseta para permitir nova rodada
+        round_active = 0;
     }
     pthread_mutex_unlock(&round_mutex);
     
     return NULL;
 }
+
 int find_remaining_time() {
     if (round_active != 1) return 0;
     
@@ -186,8 +228,15 @@ void * client_thread_handler(void *args_ptr) {
             if (strcmp(received_msg.type, "bet") == 0) {
                 if (can_bet) {
                     // Aposta aceita
+                    pthread_mutex_lock(&bets_mutex);
+                    if (round_bet_count < MAX_CLIENTS) {
+                        round_bets[round_bet_count] = received_msg.value;
+                        round_bet_count++;
+                    }
+                    pthread_mutex_unlock(&bets_mutex);
+                    
                     strcpy(response_msg.type, "bet_accepted");
-                    response_msg.player_profit = 0.0; // Por enquanto sem lucro
+                    response_msg.player_profit = 0.0;
                     response_msg.house_profit = 0.0;
                 } else {
                     // Aposta rejeitada (tempo esgotado)

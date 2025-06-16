@@ -33,13 +33,13 @@ int main (int argc, char **argv) {
     // Verifica se foram fornecidos o número correto de argumentos
     if (argc != 5) {
         fprintf(stderr, "Error: Invalid number of arguments\n");
-        usage(argc, argv);
+        //usage(argc, argv);
     }
 
     // Valida se tem a flag -nick
     if (strcmp(argv[3], "-nick") != 0) {
         fprintf(stderr, "Error: Invalid flag. Expected '-nick'\n");
-        usage(argc, argv);
+        //usage(argc, argv);
     }
 
     // Validação do tamanho do nickname
@@ -92,7 +92,7 @@ int main (int argc, char **argv) {
     int bets_closed = 0; // Flag para controlar se as apostas foram encerradas
     
     while(round_active) {
-        // Verifica se há mensagens do servidor (não bloqueante)
+        // Verifica se há mensagens do servidor
         fd_set read_fds;
         struct timeval timeout;
         FD_ZERO(&read_fds);
@@ -178,6 +178,7 @@ int main (int argc, char **argv) {
     }
 
     close(s);
+    // EU TENHO QUE MUDAR ESSA MENSAGEM DE LUGAR
     printf("Aposte com responsabilidade. A plataforma é nova e tá com horário bugado.\nVolte logo, %s!\n", argv[4]);
     exit(EXIT_SUCCESS);
 }
