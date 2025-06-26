@@ -88,86 +88,98 @@ int main (int argc, char **argv) {
     aviator_msg send_msg;
     aviator_msg response_msg;
     char input_buffer[BUFSZ];
-    int round_active = 1; // Flag para controlar se ainda pode apostar
-    int bets_closed = 0; // Flag para controlar se as apostas foram encerradas
-    
-    while(round_active) {
-        // Verifica se há mensagens do servidor
+    int  round_active = 1; // controla loop principal
+    int  bets_closed  = 0; // apostas encerradas
+    int  user_quit    = 0; // saiu via Q
+
+    while (round_active) {
+        // Monitora socket e stdin
         fd_set read_fds;
         struct timeval timeout;
         FD_ZERO(&read_fds);
         FD_SET(s, &read_fds);
         FD_SET(STDIN_FILENO, &read_fds);
-        timeout.tv_sec = 0;
+        timeout.tv_sec  = 0;
         timeout.tv_usec = 100000; // 100ms
-        
+
         int activity = select(s + 1, &read_fds, NULL, NULL, &timeout);
-        
+
         if (activity > 0) {
-            // Verifica se há mensagem do servidor
+            // Mensagem do servidor
             if (FD_ISSET(s, &read_fds)) {
                 recv_count = recv(s, &response_msg, sizeof(aviator_msg), MSG_DONTWAIT);
                 if (recv_count > 0) {
                     if (strcmp(response_msg.type, "round_ended") == 0) {
                         printf("Apostas encerradas! Não é mais possível apostar nesta rodada. Digite [C] para sacar.\n");
                         bets_closed = 1;
-                    } else if (strcmp(response_msg.type, "bet_accepted") == 0) {
+                    }
+                    else if (strcmp(response_msg.type, "bet_accepted") == 0) {
                         printf("Aposta recebida: R$ %.2f\n", response_msg.value);
-                    } else if (strcmp(response_msg.type, "bet_rejected") == 0) {
+                    }
+                    else if (strcmp(response_msg.type, "bet_rejected") == 0) {
                         printf("Apostas encerradas! Não é mais possível apostar nesta rodada. Digite [C] para sacar.\n");
                         bets_closed = 1;
-                    } 
-                } else if (recv_count == 0) {
+                    }
+                    else if (strcmp(response_msg.type, "multiplier") == 0) {
+                        printf("Multiplicador atual: %.2fx\n", response_msg.value);
+                    }
+                    else if (strcmp(response_msg.type, "explode") == 0) {
+                        printf("Explodiu em %.2fx! Fim de rodada.\n", response_msg.value);
+                        round_active = 0;
+                    }
+                    else if (strcmp(response_msg.type, "bye") == 0) {
+                        printf("O servidor caiu, mas sua esperança pode continuar de pé. Até breve!\n");
+                        round_active = 0;
+                    }
+                }
+                else if (recv_count == 0) {
                     printf("\nO servidor caiu, mas sua esperança pode continuar de pé. Até breve!\n");
-                    break;
+                    round_active = 0;
                 }
             }
-            
-            // Verifica se há entrada do usuário
-            if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-                if (fgets(input_buffer, BUFSZ, stdin) == NULL) {
-                    break; 
-                }
 
-                input_buffer[strcspn(input_buffer, "\n")] = 0; // Remove o caractere de nova linha
+            // Entrada do usuário
+            if (FD_ISSET(STDIN_FILENO, &read_fds) && round_active) {
+                if (fgets(input_buffer, BUFSZ, stdin) == NULL) {
+                    round_active = 0;
+                    break;
+                }
+                input_buffer[strcspn(input_buffer, "\n")] = 0;
 
                 if (strcmp(input_buffer, "Q") == 0) {
                     // Usuário quer sair
+                    user_quit = 1;
+                    round_active = 0;
+                    memset(&send_msg, 0, sizeof(send_msg));
+                    strcpy(send_msg.type, "bye");
+                    send(s, &send_msg, sizeof(aviator_msg), 0);
                     break;
                 }
-                
+
                 if (strcmp(input_buffer, "C") == 0 && bets_closed) {
-                    // Usuário quer sacar (implementar depois)
                     printf("Funcionalidade de saque será implementada posteriormente.\n");
                     continue;
                 }
 
                 if (!bets_closed) {
                     if (isalpha(input_buffer[0])) {
-                        // Se for uma letra, tem que ser Q
                         fprintf(stderr, "Error: Invalid command\n");
                         continue;
                     }
-
                     float bet_value;
                     char extra_char;
-                    
                     if (sscanf(input_buffer, "%f%c", &bet_value, &extra_char) != 1 || bet_value <= 0) {
-                        // A aposta tem que ser um número maior que zero
                         fprintf(stderr, "Error: Invalid bet value\n");
-                        continue; 
+                        continue;
                     }
-
-                    // Se tudo tá ok, envia a aposta para o servidor
-                    memset(&send_msg, 0, sizeof(aviator_msg)); 
+                    // Envia a aposta
+                    memset(&send_msg, 0, sizeof(send_msg));
                     strcpy(send_msg.type, "bet");
-                    send_msg.value = bet_value;
-                    send_msg.player_id = 0; // Será preenchido pelo servidor
-                    send_msg.player_profit = 0.0;
-                    send_msg.house_profit = 0.0;
-
-                    // Envia a mensagem para o servidor
-                    if(send(s, &send_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
+                    send_msg.value        = bet_value;
+                    send_msg.player_id    = 0;
+                    send_msg.player_profit= 0.0f;
+                    send_msg.house_profit = 0.0f;
+                    if (send(s, &send_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
                         logexit("send");
                     }
                 } else {
@@ -178,7 +190,10 @@ int main (int argc, char **argv) {
     }
 
     close(s);
-    // EU TENHO QUE MUDAR ESSA MENSAGEM DE LUGAR
-    printf("Aposte com responsabilidade. A plataforma é nova e tá com horário bugado.\nVolte logo, %s!\n", argv[4]);
+
+    if (user_quit) {
+        printf("Aposte com responsabilidade. A plataforma é nova e tá com horário bugado.\nVolte logo, %s!\n", argv[4]);
+    }
+
     exit(EXIT_SUCCESS);
 }
