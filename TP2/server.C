@@ -407,6 +407,7 @@ void* shutdown_thread(void* arg) {
 
             // Log geral
             printf("event=bye | id=* \n");
+            printf("Encerrando o servidor.\n")
 
             // Envia bye a todos os clientes e fecha sockets
             for (int i = 0; i < num_clients; i++) {
