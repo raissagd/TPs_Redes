@@ -23,25 +23,23 @@ Matricula: 2022055823
 #include <sys/socket.h>
 
 #define BUFSZ 1024
-#define COUNTDOWN_TIME 10 // Tempo em segundos da janela de apostas
-#define MAX_CLIENTS 10 // Máximo de clientes simultâneos
+#define COUNTDOWN_TIME 10 // Tempo da janela de apostas
+#define MAX_CLIENTS 10 // Máximo de clientes
 
-int32_t next_player_id = 1; // Variável global para ID do jogador
-int round_active = 0; // Flag para controlar se a rodada está ativa (0 = não iniciada, 1 = ativa, 2 = encerrada)
-time_t round_start_time = 0; // Timestamp do início da rodada
-pthread_mutex_t round_mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex para proteger variáveis da rodada
+// Variáveis globais
+int32_t next_player_id = 1;
+int round_active = 0; // 0 = não iniciada, 1 = ativa, 2 = encerrada
+time_t round_start_time = 0;
 
-// Array para armazenar sockets dos clientes conectados
+// Array para clientes conectados
 int connected_clients[MAX_CLIENTS];
 int num_clients = 0;
-pthread_mutex_t clients_mutex = PTHREAD_MUTEX_INITIALIZER; // Mutex para proteger array de clientes
 
-// Variáveis para armazenar apostas da rodada atual
+// Array para apostas
 float round_bets[MAX_CLIENTS];
 int round_bet_count = 0;
-pthread_mutex_t bets_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// Struct para passar argumentos para a thread do cliente.
+// Struct para argumentos da thread
 typedef struct {
     int client_socket;
     int32_t player_id;
@@ -53,39 +51,31 @@ void usage (int argc, char **argv) {
     exit(EXIT_FAILURE);
 }
 
-/*
- Calcula o ponto de explosão (multiplier) baseado nas apostas dos jogadores
- */
+// Calcula o ponto de explosão baseado nas apostas
 float calculate_explosion_point(int num_players, float bets[]) {
     float total_bets = 0.0f;
     
-    // Calcula o somatório das apostas
     for (int i = 0; i < num_players; i++) {
         total_bets += bets[i];
     }
     
-    // Aplica a fórmula: m_e = sqrt(1 + N + 0.01 * sum(A_i))
     float explosion_point = sqrtf(1.0f + (float)num_players + 0.01f * total_bets);
-    
     return explosion_point;
 }
 
-// Função para adicionar cliente ao array de clientes conectados
+// Adiciona cliente (versão simples)
 void add_client(int socket_cliente) {
-    pthread_mutex_lock(&clients_mutex);
     if (num_clients < MAX_CLIENTS) {
         connected_clients[num_clients] = socket_cliente;
         num_clients++;
     }
-    pthread_mutex_unlock(&clients_mutex);
 }
 
-// Função para remover cliente do array de clientes conectados
+// Remove cliente (versão simples)
 void remove_client(int socket_cliente) {
-    pthread_mutex_lock(&clients_mutex);
     for (int i = 0; i < num_clients; i++) {
         if (connected_clients[i] == socket_cliente) {
-            // Move todos os elementos após este para uma posição anterior
+            // Move elementos para frente
             for (int j = i; j < num_clients - 1; j++) {
                 connected_clients[j] = connected_clients[j + 1];
             }
@@ -93,59 +83,52 @@ void remove_client(int socket_cliente) {
             break;
         }
     }
-    pthread_mutex_unlock(&clients_mutex);
 }
 
-// Função para notificar todos os clientes conectados que as apostas foram encerradas
-void notify_timeout() {
+// Notifica fim da rodada para todos os clientes
+void notify_round_end() {
     float explosion_point = 0.0;
     
-    // Calcula o ponto de explosão se houver apostas
-    pthread_mutex_lock(&bets_mutex);
     if (round_bet_count > 0) {
         explosion_point = calculate_explosion_point(round_bet_count, round_bets);
     }
     
-    // Reseta as apostas para a próxima rodada
-    round_bet_count = 0;
-    memset(round_bets, 0, sizeof(round_bets));
-    pthread_mutex_unlock(&bets_mutex);
-    
     printf("Ponto de explosão calculado: %.2f\n", explosion_point);
     
-    aviator_msg msg_encerramento;
-    memset(&msg_encerramento, 0, sizeof(aviator_msg));
-    strcpy(msg_encerramento.type, "round_ended");
-    msg_encerramento.value = explosion_point; // Envia o ponto de explosão
-    msg_encerramento.player_id = 0;
-    msg_encerramento.player_profit = 0.0;
-    msg_encerramento.house_profit = 0.0;
+    // Prepara mensagem de fim de rodada
+    aviator_msg msg_fim;
+    memset(&msg_fim, 0, sizeof(aviator_msg));
+    strcpy(msg_fim.type, "round_ended");
+    msg_fim.value = explosion_point;
+    msg_fim.player_id = 0;
+    msg_fim.player_profit = 0.0;
+    msg_fim.house_profit = 0.0;
 
-    pthread_mutex_lock(&clients_mutex);
+    // Envia para todos os clientes conectados
     for (int i = 0; i < num_clients; i++) {
-        send(connected_clients[i], &msg_encerramento, sizeof(aviator_msg), 0);
+        send(connected_clients[i], &msg_fim, sizeof(aviator_msg), 0);
     }
-    pthread_mutex_unlock(&clients_mutex);
+    
+    // Reseta variáveis para próxima rodada
+    round_bet_count = 0;
+    memset(round_bets, 0, sizeof(round_bets));
+    round_active = 0; // Permite nova rodada
 }
 
-// Thread que controla o tempo da rodada
+// Thread que controla o tempo
 void* countdown_thread(void* arg) {
     sleep(COUNTDOWN_TIME);
     
-    pthread_mutex_lock(&round_mutex);
     if (round_active == 1) {
         round_active = 2;
-        printf("Apostas encerradas! Não é mais possível apostar nesta rodada.\n");
-        notify_timeout();
-        
-        // ADICIONAR: Reseta para permitir nova rodada
-        round_active = 0;
+        printf("Apostas encerradas!\n");
+        notify_round_end();
     }
-    pthread_mutex_unlock(&round_mutex);
     
     return NULL;
 }
 
+// Calcula tempo restante
 int find_remaining_time() {
     if (round_active != 1) return 0;
     
@@ -156,48 +139,34 @@ int find_remaining_time() {
     return tempo_restante > 0 ? tempo_restante : 0;
 }
 
-// Função que será executada por cada thread
+// Thread para cada cliente
 void * client_thread_handler(void *args_ptr) {
-    // Extrai os argumentos (socket e player_id) e libera a memória da struct
     thread_args_t *args = (thread_args_t *)args_ptr;
     int csock = args->client_socket;
     int32_t player_id = args->player_id;
     free(args_ptr);
 
-    char client_addr_str[BUFSZ];
-    struct sockaddr_storage client_storage;
-    struct sockaddr *client_addr = (struct sockaddr *)&client_storage;
-    socklen_t client_addr_len = sizeof(client_storage);
-
-    // Obtém informações do cliente conectado para log
-    getpeername(csock, client_addr, &client_addr_len);
-    addrtostr(client_addr, client_addr_str, BUFSZ);
-    //printf("Thread de iniciada o cliente de ID: %d\n", player_id);
-
-    // Adiciona cliente ao array de clientes conectados
+    // Adiciona cliente
     add_client(csock);
 
-    // Inicia a rodada se for o primeiro cliente
-    pthread_mutex_lock(&round_mutex);
+    // Se for o primeiro cliente, inicia rodada
     if (round_active == 0) {
         round_active = 1;
         round_start_time = time(NULL);
-        //printf("Primeira conexão detectada! Iniciando contagem regressiva.\n");
         printf("event = start | id = * | N = 1\n");
         
-        // Cria thread para controlar o tempo da rodada
+        // Cria thread de tempo
         pthread_t time_thread;
         pthread_create(&time_thread, NULL, countdown_thread, NULL);
         pthread_detach(time_thread);
     }
-    pthread_mutex_unlock(&round_mutex);
 
-    // Envia mensagem inicial de start para o cliente
+    // Envia mensagem inicial
     aviator_msg start_msg;
     memset(&start_msg, 0, sizeof(aviator_msg));
     start_msg.player_id = player_id;
     strcpy(start_msg.type, "start");
-    start_msg.value = (float)find_remaining_time(); // Tempo restante no momento da conexão
+    start_msg.value = (float)find_remaining_time();
     start_msg.player_profit = 0.0;
     start_msg.house_profit = 0.0;
 
@@ -205,41 +174,35 @@ void * client_thread_handler(void *args_ptr) {
         logexit("send");
     }
 
-    // Lógica de comunicação com o cliente
+    // Loop principal de comunicação
     aviator_msg received_msg;
     size_t count;
     while((count = recv(csock, &received_msg, sizeof(aviator_msg), 0)) > 0) {
-        // Garante que uma struct completa foi recebida
         if (count == sizeof(aviator_msg)) {
-            // Atribui o ID do jogador à mensagem recebida
             received_msg.player_id = player_id;
 
-            printf("event = %s | id = %d | bet = %.2f | N = %d\n", received_msg.type, player_id, received_msg.value, num_clients);
+            printf("event = %s | id = %d | bet = %.2f | N = %d\n", 
+                   received_msg.type, player_id, received_msg.value, num_clients);
 
-            // Verifica se ainda é possível apostar
-            pthread_mutex_lock(&round_mutex);
+            // Verifica se pode apostar
             int remaining_time = find_remaining_time();
             int can_bet = (round_active == 1 && remaining_time > 0);
-            pthread_mutex_unlock(&round_mutex);
 
-            // Prepara a resposta
             aviator_msg response_msg = received_msg;
             
             if (strcmp(received_msg.type, "bet") == 0) {
                 if (can_bet) {
-                    // Aposta aceita
-                    pthread_mutex_lock(&bets_mutex);
+                    // Aceita a aposta
                     if (round_bet_count < MAX_CLIENTS) {
                         round_bets[round_bet_count] = received_msg.value;
                         round_bet_count++;
                     }
-                    pthread_mutex_unlock(&bets_mutex);
                     
                     strcpy(response_msg.type, "bet_accepted");
                     response_msg.player_profit = 0.0;
                     response_msg.house_profit = 0.0;
                 } else {
-                    // Aposta rejeitada (tempo esgotado)
+                    // Rejeita a aposta
                     strcpy(response_msg.type, "bet_rejected");
                     response_msg.value = 0.0;
                     response_msg.player_profit = 0.0;
@@ -247,14 +210,14 @@ void * client_thread_handler(void *args_ptr) {
                 }
             }
 
-            // Envia a resposta para o cliente
+            // Envia resposta
             if(send(csock, &response_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
                 logexit("send");
             }
         }
     }
 
-    // Remove cliente do array antes de fechar a conexão
+    // Limpa ao sair
     remove_client(csock);
     close(csock);
     printf("Conexão com o jogador %d encerrada.\n", player_id);
