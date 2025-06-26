@@ -2,6 +2,8 @@ IPV6
 
 ./bin/server v6 51511
 ./bin/client ::1 51511 -nick Ra
+./bin/client ::1 51511 -nick Ju
+
 IPV4
 
 ./bin/server v4 51511
