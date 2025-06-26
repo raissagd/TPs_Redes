@@ -124,9 +124,16 @@ void notify_round_end() {
     msg_fim.player_profit = 0.0f;
     msg_fim.house_profit  = house_profit;
 
-    // Envia para todos os clientes conectados
+    // Envia apenas para clientes que APOSTARAM
     for (int i = 0; i < num_clients; i++) {
-        send(connected_clients[i], &msg_fim, sizeof(aviator_msg), 0);
+        int player_id = client_player_ids[i];
+        int player_index = player_id - 1;
+        
+        // Só envia round_ended para quem apostou
+        if (player_index >= 0 && player_index < MAX_CLIENTS && 
+            player_has_bet[player_index]) {
+            send(connected_clients[i], &msg_fim, sizeof(aviator_msg), 0);
+        }
     }
 
     // Reseta variáveis para próxima rodada
@@ -179,15 +186,18 @@ void* multiplier_thread(void* arg) {
             msg_exp.player_profit= 0.0f; // Será definido individualmente
             msg_exp.house_profit = house_profit;
             
-            // envia explode para todos os clientes com seus profits individuais
+            // envia explode apenas para clientes que APOSTARAM
             for (int i = 0; i < num_clients; i++) {
                 int player_id = client_player_ids[i];
                 int player_index = player_id - 1;
-                if (player_index >= 0 && player_index < MAX_CLIENTS) {
+                
+                // Só envia explode para quem apostou nesta rodada
+                if (player_index >= 0 && player_index < MAX_CLIENTS && 
+                    player_has_bet[player_index]) {
                     msg_exp.player_profit = player_profits[player_index];
+                    msg_exp.player_id = player_id;
+                    send(connected_clients[i], &msg_exp, sizeof(msg_exp), 0);
                 }
-                msg_exp.player_id = player_id;
-                send(connected_clients[i], &msg_exp, sizeof(msg_exp), 0);
             }
             
             multiplier_running = 0;
@@ -200,13 +210,14 @@ void* multiplier_thread(void* arg) {
         current_multiplier += 0.01f;
         msg.value = current_multiplier;
 
-        // envia multiplicador apenas para clientes que não fizeram cashout
+        // envia multiplicador apenas para clientes que APOSTARAM e não fizeram cashout
         for (int i = 0; i < num_clients; i++) {
             int player_id = client_player_ids[i];
             int player_index = player_id - 1;
             
-            // Só envia se o jogador não fez cashout
-            if (player_index < 0 || player_index >= MAX_CLIENTS || !players_cashed_out[player_index]) {
+            // Só envia se o jogador APOSTOU nesta rodada E não fez cashout
+            if (player_index >= 0 && player_index < MAX_CLIENTS && 
+                player_has_bet[player_index] && !players_cashed_out[player_index]) {
                 send(connected_clients[i], &msg, sizeof(msg), 0);
             }
         }
@@ -407,7 +418,7 @@ void* shutdown_thread(void* arg) {
 
             // Log geral
             printf("event=bye | id=* \n");
-            printf("Encerrando o servidor.\n")
+            printf("Encerrando o servidor.\n");
 
             // Envia bye a todos os clientes e fecha sockets
             for (int i = 0; i < num_clients; i++) {

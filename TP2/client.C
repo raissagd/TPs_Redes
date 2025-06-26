@@ -128,7 +128,15 @@ int main (int argc, char **argv) {
                         printf("Multiplicador atual: %.2fx\n", response_msg.value);
                     }
                     else if (strcmp(response_msg.type, "explode") == 0) {
-                        printf("Aviãozinho explodiu em: %.2fx.\nProfit da casa: R$ %.2f\n", response_msg.value, response_msg.house_profit);
+                        printf("Aviãozinho explodiu em: %.2fx.\n", response_msg.value);
+
+                        // Se o jogador NÃO fez cashout e apostou, ele perdeu
+                        if (has_bet && response_msg.player_profit < 0) {
+                            printf("Você perdeu R$ %.2f. Tente novamente na próxima rodada! Aviãozinho tá pagando :)\n", -response_msg.player_profit);
+                            printf("Profit atual: R$ %.2f\n", response_msg.player_profit);
+                        }
+                        // Se o jogador fez cashout, só mostra o profit da casa
+                        printf("Profit da casa: R$ %.2f\n", response_msg.house_profit);
                         round_active = 0;
                     }
                     else if (strcmp(response_msg.type, "payout") == 0) {
