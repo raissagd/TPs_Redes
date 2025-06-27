@@ -479,39 +479,6 @@ void * client_thread_handler(void *args_ptr) {
     return NULL;
 }
 
-/*
-    Descricao: thread que aguarda o comando 'Q' no stdin para desligar o servidor
-    Argumentos: ponteiro para argumentos (não utilizado, mas necessário para compatibilidade com pthread)
-    Retorno: nenhum
-*/
-void* shutdown_thread(void* arg) {
-    char buf[8];
-    while (fgets(buf, sizeof(buf), stdin)) {
-        if (buf[0] == 'Q') {
-            // Prepara mensagem de bye
-            aviator_msg msg_bye;
-            memset(&msg_bye, 0, sizeof(msg_bye));
-            strcpy(msg_bye.type, "bye");
-            msg_bye.player_id    = 0;
-            msg_bye.value        = 0.0f;
-            msg_bye.house_profit = house_profit; // opcional, se quiser enviar
-
-            // Log geral
-            printf("event=bye | id=* \n");
-            printf("Encerrando o servidor.\n");
-
-            // Envia bye a todos os clientes e fecha sockets
-            for (int i = 0; i < num_clients; i++) {
-                send(connected_clients[i], &msg_bye, sizeof(msg_bye), 0);
-                close(connected_clients[i]);
-            }
-            // Encerra o servidor
-            exit(EXIT_SUCCESS);
-        }
-    }
-    return NULL;
-}
-
 int main (int argc, char **argv) {
     // Verifica se os argumentos necessários foram fornecidos
     if (argc < 3) {
@@ -548,44 +515,55 @@ int main (int argc, char **argv) {
         logexit("listen");
     }
 
-    pthread_t tid_shutdown;
-    pthread_create(&tid_shutdown, NULL, shutdown_thread, NULL);
-    pthread_detach(tid_shutdown);
-
     char addrstr[BUFSZ];
     // Converte o endereço do servidor para string e exibe
     addrtostr(addr, addrstr, BUFSZ);
 
     while (1) {
-        struct sockaddr_storage client_storage;
-        struct sockaddr *client_addr = (struct sockaddr *)&client_storage;
-        socklen_t client_addr_len    = sizeof(client_storage);
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(s, &rfds); // escuta novo cliente
+        FD_SET(STDIN_FILENO, &rfds); // escuta 'Q' do teclado
+        int maxfd = s > STDIN_FILENO ? s : STDIN_FILENO;
 
-        // Aceita uma nova conexão de cliente
-        int csock = accept(s, client_addr, &client_addr_len);
-        if (csock == -1) {
-            logexit("accept");
+        if (select(maxfd+1, &rfds, NULL, NULL, NULL) < 0) {
+            logexit("select");
         }
 
-        char client_addr_str[BUFSZ];
-        addrtostr(client_addr, client_addr_str, BUFSZ);
-
-        pthread_t thread_id;
-        // Aloca memória para os argumentos da thread (socket + player_id)
-        thread_args_t *args = (thread_args_t*)malloc(sizeof(thread_args_t));
-        if (!args) {
-            logexit("malloc");
+        // 1) Se o usuário apertou Q + Enter
+        if (FD_ISSET(STDIN_FILENO, &rfds)) {
+            char c = getchar();
+            if (c == 'Q') {
+                aviator_msg msg_bye;
+                memset(&msg_bye, 0, sizeof(msg_bye));
+                strcpy(msg_bye.type, "bye");
+                msg_bye.player_id = 0;
+                msg_bye.value     = 0.0f;
+                printf("event=bye | id=*\n");
+                // envia bye e fecha todos
+                for (int i = 0; i < num_clients; i++) {
+                    send(connected_clients[i], &msg_bye, sizeof(msg_bye), 0);
+                    close(connected_clients[i]);
+                }
+                close(s);
+                exit(EXIT_SUCCESS);
+            }
         }
-        args->client_socket = csock;
-        args->player_id     = next_player_id++; // Atribui o ID atual e incrementa para o próximo
 
-        // Cria uma nova thread para atender o cliente, passando a struct de argumentos
-        if (pthread_create(&thread_id, NULL, client_thread_handler, args) < 0) {
-            logexit("could not create thread");
+        // 2) Se chegou conexão nova
+        if (FD_ISSET(s, &rfds)) {
+            struct sockaddr_storage client_storage;
+            socklen_t client_addr_len = sizeof(client_storage);
+            int csock = accept(s, (struct sockaddr*)&client_storage, &client_addr_len);
+            if (csock < 0) logexit("accept");
+
+            pthread_t thread_id;
+            thread_args_t *args = (thread_args_t*)malloc(sizeof(thread_args_t));
+            args->client_socket = csock;
+            args->player_id     = next_player_id++;
+            pthread_create(&thread_id, NULL, client_thread_handler, args);
+            pthread_detach(thread_id);
         }
-
-        pthread_detach(thread_id); // Libera recursos da thread automaticamente ao terminar
     }
-
     exit(EXIT_SUCCESS);
 }
