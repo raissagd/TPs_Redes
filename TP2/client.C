@@ -21,6 +21,10 @@ Matricula: 2022055823
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+// Variáveis globais
+float player_total_profit = 0.0f; // Para armazenar profit acumulado
+int waiting_next_round = 0;       // Flag para indicar aguardando próxima rodada
+
 void usage (int argc, char **argv) {
     printf("Usage: %s <server IP> <server port> -nick <nickname>\n", argv[0]);
     printf("Example: %s 127.0.0.1 51511 -nick Flip\n", argv[0]);
@@ -82,7 +86,8 @@ int main (int argc, char **argv) {
     // Verifica se é mensagem de start e exibe o tempo restante
     if (strcmp(initial_msg.type, "start") == 0) {
         int remaining_time = (int)initial_msg.value;
-        printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes):\n", remaining_time);
+        player_total_profit = initial_msg.player_profit; // Recebe profit acumulado
+        printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes)\n", remaining_time);
     }
 
     aviator_msg send_msg;
@@ -94,7 +99,8 @@ int main (int argc, char **argv) {
     int  has_bet      = 0; // flag para verificar se o usuário apostou
     float current_bet = 0.0f; // armazena o valor da aposta atual
 
-    while (round_active) {
+    int connected = 1; // Controla conexão geral
+    while (connected) {
         // Monitora socket e stdin
         fd_set read_fds;
         struct timeval timeout;
@@ -111,14 +117,18 @@ int main (int argc, char **argv) {
             if (FD_ISSET(s, &read_fds)) {
                 recv_count = recv(s, &response_msg, sizeof(aviator_msg), MSG_DONTWAIT);
                 if (recv_count > 0) {
-                    if (strcmp(response_msg.type, "round_ended") == 0) {
-                        printf("Apostas encerradas! Digite [C] para sacar ou aguarde o resultado.\n");
-                        bets_closed = 1;
-                    }
-                    else if (strcmp(response_msg.type, "bet_accepted") == 0) {
-                        printf("Aposta recebida: R$ %.2f\n", response_msg.value);
-                        has_bet = 1;
-                        current_bet = response_msg.value; // armazena o valor da aposta
+                    // Tratar mensagem "start" para novas rodadas
+                    if (strcmp(response_msg.type, "start") == 0) {
+                        int remaining_time = (int)response_msg.value;
+                        player_total_profit = response_msg.player_profit; // Atualiza profit
+                        printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes)\n", remaining_time);
+                        
+                        // Resetar variáveis da rodada
+                        round_active = 1;
+                        bets_closed = 0;
+                        has_bet = 0;
+                        current_bet = 0.0f;
+                        waiting_next_round = 0;
                     }
                     else if (strcmp(response_msg.type, "closed") == 0) {
                         printf("Apostas encerradas! Não é mais possível apostar nesta rodada. Digite [C] para sacar.\n");
@@ -127,21 +137,31 @@ int main (int argc, char **argv) {
                     else if (strcmp(response_msg.type, "multiplier") == 0) {
                         printf("Multiplicador atual: %.2fx\n", response_msg.value);
                     }
+                    // Não sair após explosão, aguardar próxima rodada
                     else if (strcmp(response_msg.type, "explode") == 0) {
                         printf("Aviãozinho explodiu em: %.2fx.\n", response_msg.value);
+                        player_total_profit = response_msg.player_profit; // Atualiza profit
 
-                        // Se o jogador NÃO fez cashout e apostou, ele perdeu
-                        if (has_bet && response_msg.player_profit < 0) {
-                            printf("Você perdeu R$ %.2f. Tente novamente na próxima rodada! Aviãozinho tá pagando :)\n", -response_msg.player_profit);
-                            printf("Profit atual: R$ %.2f\n", response_msg.player_profit);
+                        // Se o jogador apostou e não fez cashout, ele perdeu
+                        if (has_bet) {
+                            printf("Você perdeu R$ %.2f. Tente novamente na próxima rodada! Aviãozinho tá pagando :).\n", current_bet);
+                            printf("Profit atual: R$ %.2f\n", player_total_profit);
                         }
-                        // Se o jogador fez cashout, só mostra o profit da casa
+                        
                         printf("Profit da casa: R$ %.2f\n", response_msg.house_profit);
-                        round_active = 0;
+                        
+                        // Não sair, aguardar próxima rodada
+                        round_active = 0;  // Encerra rodada atual
+                        waiting_next_round = 1; // Mas permanece conectado
+                        has_bet = 0;
+                        current_bet = 0.0f;
+                        bets_closed = 0;
                     }
                     else if (strcmp(response_msg.type, "payout") == 0) {
                         float multiplier = (current_bet > 0) ? response_msg.value / current_bet : 0.0f;
-                        printf("Você sacou em %.2fx e ganhou R$ %.2f!\nProfit atual: R$ %.2f\n", multiplier, response_msg.value, response_msg.player_profit);
+                        player_total_profit = response_msg.player_profit; // Atualiza profit acumulado
+                        printf("Você sacou em %.2fx e ganhou R$ %.2f!\nSeu profit atual: R$ %.2f\n", 
+                            multiplier, response_msg.value, player_total_profit);
                         has_bet = 0;
                         current_bet = 0.0f;
                     }
@@ -150,19 +170,19 @@ int main (int argc, char **argv) {
                     }
                     else if (strcmp(response_msg.type, "bye") == 0) {
                         printf("O servidor caiu, mas sua esperança pode continuar de pé. Até breve!\n");
-                        round_active = 0;
+                        connected = 0; // Sai do loop principal
                     }
                 }
                 else if (recv_count == 0) {
                     printf("\nO servidor caiu, mas sua esperança pode continuar de pé. Até breve!\n");
-                    round_active = 0;
+                    connected = 0; // Sai do loop principal
                 }
             }
 
-            // Entrada do usuário
-            if (FD_ISSET(STDIN_FILENO, &read_fds) && round_active) {
+            // Entrada do usuário - permitir comandos mesmo aguardando próxima rodada
+            if (FD_ISSET(STDIN_FILENO, &read_fds) && connected) {
                 if (fgets(input_buffer, BUFSZ, stdin) == NULL) {
-                    round_active = 0;
+                    connected = 0;
                     break;
                 }
                 input_buffer[strcspn(input_buffer, "\n")] = 0;
@@ -170,34 +190,40 @@ int main (int argc, char **argv) {
                 if (strcmp(input_buffer, "Q") == 0) {
                     // Usuário quer sair
                     user_quit = 1;
-                    round_active = 0;
+                    connected = 0;
                     memset(&send_msg, 0, sizeof(send_msg));
                     strcpy(send_msg.type, "bye");
                     send(s, &send_msg, sizeof(aviator_msg), 0);
                     break;
                 }
 
-                if (strcmp(input_buffer, "C") == 0) {
-                    if (!has_bet) {
-                        printf("Você não fez nenhuma aposta nesta rodada.\n");
-                        continue;
-                    }
-                    
-                    // Envia pedido de cash-out
-                    memset(&send_msg, 0, sizeof(send_msg));
-                    strcpy(send_msg.type, "cashout");
-                    send_msg.value = 0.0f; // O valor será calculado pelo servidor
-                    if (send(s, &send_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
-                        logexit("send");
+                // Tratar comando C (cashout) quando apostas estão fechadas
+                if (bets_closed && strcmp(input_buffer, "C") == 0) {
+                    if (has_bet) {
+                        // Envia comando de cashout
+                        memset(&send_msg, 0, sizeof(send_msg));
+                        strcpy(send_msg.type, "cashout");
+                        send_msg.value        = 0.0f;
+                        send_msg.player_id    = 0;
+                        send_msg.player_profit= 0.0f;
+                        send_msg.house_profit = 0.0f;
+                        if (send(s, &send_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
+                            logexit("send");
+                        }
+                    } else {
+                        // sei que essa validação não é obrigatória mas é útil na hora de depurar
+                        printf("Você não apostou nesta rodada.\n");
                     }
                     continue;
                 }
 
                 if (!bets_closed) {
-                    if (isalpha(input_buffer[0])) {
+                    // Verifica se é um comando inválido (letra que não seja C)
+                    if (isalpha(input_buffer[0]) && strcmp(input_buffer, "C") != 0) {
                         fprintf(stderr, "Error: Invalid command\n");
                         continue;
                     }
+                    
                     float bet_value;
                     char extra_char;
                     
@@ -221,7 +247,10 @@ int main (int argc, char **argv) {
                     has_bet     = 1;         
                     current_bet = bet_value;
                 } else {
-                    printf("Apostas já encerradas. Digite [C] para sacar.\n");
+                    // Se chegou aqui e não é o comando C, é um comando inválido
+                    if (strcmp(input_buffer, "C") != 0) {
+                        printf("Error: Invalid command\n");
+                    }
                 }
             }
         }
