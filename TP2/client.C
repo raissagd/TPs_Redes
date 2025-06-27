@@ -21,17 +21,27 @@ Matricula: 2022055823
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+// ------------------------------------------------------------------------------------------------
+
+#define BUFSZ 1024
+
 // Variáveis globais
 float player_total_profit = 0.0f; // Para armazenar profit acumulado
 int waiting_next_round = 0;       // Flag para indicar aguardando próxima rodada
 
+// ------------------------------------------------------------------------------------------------
+
+/*
+    Descricao: Funcao que imprime a mensagem de uso do programa
+    Argumentos: argc - numero de argumentos passados
+               argv - vetor de argumentos passados
+    Retorno: Nao possui           
+*/
 void usage (int argc, char **argv) {
     printf("Usage: %s <server IP> <server port> -nick <nickname>\n", argv[0]);
     printf("Example: %s 127.0.0.1 51511 -nick Flip\n", argv[0]);
     exit(EXIT_FAILURE);
 }
-
-#define BUFSZ 1024
 
 int main (int argc, char **argv) {
     // Verifica se foram fornecidos o número correto de argumentos
