@@ -39,16 +39,18 @@ int main (int argc, char **argv) {
     // Verifica se foram fornecidos o número correto de argumentos
     if (argc != 5) {
         fprintf(stderr, "Error: Invalid number of arguments\n");
+        exit(EXIT_FAILURE);
         //usage(argc, argv);
     }
 
     // Valida se tem a flag -nick
     if (strcmp(argv[3], "-nick") != 0) {
         fprintf(stderr, "Error: Invalid flag. Expected '-nick'\n");
+        exit(EXIT_FAILURE);
         //usage(argc, argv);
     }
 
-    // Validação do tamanho do nickname
+    // Valida o tamanho do nickname
     if (strlen(argv[4]) > 13) {
         fprintf(stderr, "Error: Nickname too long (max 13)\n");
         exit(EXIT_FAILURE);
@@ -85,17 +87,18 @@ int main (int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    // Verifica se é mensagem de start e exibe o tempo restante
+    // Verifica se é a mensagem de start e exibe o tempo restante
     if (strcmp(initial_msg.type, "start") == 0) {
         int remaining_time = (int)initial_msg.value;
-        printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes)\n", remaining_time);
+        printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes): ", remaining_time);
+        fflush(stdout); // força a impressão imediata
     }
 
     aviator_msg send_msg, response_msg;
     char input_buffer[BUFSZ];
-    int bets_closed   = 0;        // apostas encerradas
-    int has_bet       = 0;        // flag para verificar se o usuário apostou
-    float current_bet = 0.0f;     // armazena o valor da aposta atual
+    int bets_closed = 0; // apostas encerradas
+    int has_bet = 0; // flag para verificar se o usuário apostou
+    float current_bet = 0.0f; // armazena o valor da aposta atual
 
     // Loop principal: continua enquanto o servidor não fechar
     while (1) {
@@ -116,12 +119,12 @@ int main (int argc, char **argv) {
                 recv_count = recv(s, &response_msg, sizeof(aviator_msg), MSG_DONTWAIT);
                 if (recv_count > 0) {
                     char *t = response_msg.type;
-                    // Agrupamos 'closed' e 'explode' como eventos de fim de rodada
                     switch (t[0]) {
                         case 's':  // start
                             {
                                 int remaining_time = (int)response_msg.value;
-                                printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes)\n", remaining_time);
+                                printf("Rodada aberta! Digite o valor da aposta ou digite [Q] para sair (%d segundos restantes): ", remaining_time);
+                                fflush(stdout);
                                 bets_closed   = 0;
                                 has_bet       = 0;
                                 current_bet   = 0.0f;
@@ -129,7 +132,11 @@ int main (int argc, char **argv) {
                             break;
                         case 'c':  // "closed"
                             if (strcmp(t, "closed") == 0) {
-                                printf("Apostas encerradas! Não é mais possível apostar nesta rodada. Digite [C] para sacar.\n");
+                                if (has_bet) {
+                                    printf("Apostas encerradas! Não é mais possível apostar nesta rodada. Digite [C] para sacar.\n");
+                                } else {
+                                    printf("Apostas encerradas! Não é mais possível apostar nesta rodada.\n");
+                                }
                                 bets_closed = 1;
                             }
                             break;
@@ -150,7 +157,7 @@ int main (int argc, char **argv) {
                             if (strcmp(t, "payout") == 0) {
                                 float multiplier = (current_bet > 0) ? response_msg.value / current_bet : 0.0f;
                                 printf("Você sacou em %.2fx e ganhou R$ %.2f!\nSeu profit atual: R$ %.2f\n", multiplier, response_msg.value, response_msg.player_profit);
-                                has_bet       = 0;
+                                has_bet = 0;
                             }
                             break;
                         case 'b':  // bye
@@ -163,7 +170,7 @@ int main (int argc, char **argv) {
                     }
                 }
                 else { // recv_count <= 0: servidor fechou
-                    printf("\nO servidor caiu, mas sua esperança pode continuar de pé. Até breve!\n");
+                    printf("O servidor caiu, mas sua esperança pode continuar de pé. Até breve!\n");
                     break;
                 }
             }
@@ -183,7 +190,8 @@ int main (int argc, char **argv) {
                     printf("Aposte com responsabilidade. A plataforma é nova e tá com horário bugado.\nVolte logo, %s!\n", argv[4]);
                     break;
                 }
-
+                
+                // Não era obrigatória tratar esse erro mas deixei assim mesmo porque ajudava no debug
                 if (bets_closed && strcmp(input_buffer, "C") == 0) {
                     if (has_bet) {
                         memset(&send_msg, 0, sizeof(send_msg));
@@ -207,7 +215,7 @@ int main (int argc, char **argv) {
                         has_bet     = 1;
                         current_bet = (float)bet_value;
                     } else {
-                        printf("Error: Invalid command or bet value\n");
+                        printf("Error: Invalid bet value\n");
                     }
                 } else {
                     printf("Error: Invalid command\n");

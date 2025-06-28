@@ -47,10 +47,10 @@ Player players[MAX_CLIENTS] = {0};
 
 // Variáveis globais
 int32_t next_player_id      = 1;
-int    round_active         = 0;   // 0 = não iniciada, 1 = ativa, 2 = encerrada
+int    round_active         = 0; // 0 = não iniciada, 1 = ativa, 2 = encerrada - tipo uma máquina de estados, fica mais organizado
 time_t round_start_time     = 0;
 float  current_multiplier   = 1.0f;
-int    multiplier_running   = 0;   // Flag para controlar se está enviando multiplicadores
+int    multiplier_running   = 0; // Flag para controlar se está enviando os multiplicadores (voo do avião)
 float  explosion_point_global = 0.0f; // Para armazenar o ponto de explosão global
 
 float house_profit = 0.0f;
@@ -86,42 +86,10 @@ void usage (int argc, char **argv) {
 }
 
 /*
-    Descricao: inicia uma nova rodada
-    Argumentos: nenhum
-    Retorno: nenhum
-*/
-void start_round() {
-    round_active     = 1;
-    round_start_time = time(NULL);
-    printf("event=start | id=* | N=%d\n", num_clients);
-
-    // dispara a thread de contagem regressiva
-    pthread_t time_thread;
-    pthread_create(&time_thread, NULL, countdown_thread, NULL);
-    pthread_detach(time_thread);
-
-    // notifica todos os clientes sobre o start
-    aviator_msg start_msg;
-    memset(&start_msg, 0, sizeof(start_msg));
-    strcpy(start_msg.type, "start");
-    start_msg.value        = (float)COUNTDOWN_TIME;
-    start_msg.house_profit = house_profit;
-
-    for (int i = 0; i < num_clients; i++) {
-        int pid = client_player_ids[i];
-        int idx = pid - 1;
-        start_msg.player_id     = pid;
-        start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS) ? players[idx].profit : 0.0f;
-        send(connected_clients[i], &start_msg, sizeof(start_msg), 0);
-    }
-}
-
-/*
-    Descricao: calcula o ponto de explosão baseado nas apostas
+    Descricao: calcula o ponto de explosão baseado nas apostas, de acordo com a fórmula estabelecida no enunciado
     Argumentos: número de jogadores e array de apostas
     Retorno: ponto de explosão calculado
 */
-// Calcula o ponto de explosão baseado nas apostas
 float calculate_explosion_point(int num_players, float bets[]) {
     float total_bets = 0.0f;
 
@@ -166,6 +134,37 @@ void remove_client(int socket_cliente) {
 }
 
 /*
+    Descricao: inicia uma nova rodada
+    Argumentos: nenhum
+    Retorno: nenhum
+*/
+void start_round() {
+    round_active     = 1;
+    round_start_time = time(NULL);
+    printf("event=start | id=* | N=%d\n", num_clients);
+
+    // dispara a thread de contagem regressiva
+    pthread_t time_thread;
+    pthread_create(&time_thread, NULL, countdown_thread, NULL);
+    pthread_detach(time_thread);
+
+    // notifica todos os clientes sobre o start
+    aviator_msg start_msg;
+    memset(&start_msg, 0, sizeof(start_msg));
+    strcpy(start_msg.type, "start");
+    start_msg.value        = (float)COUNTDOWN_TIME;
+    start_msg.house_profit = house_profit;
+
+    for (int i = 0; i < num_clients; i++) {
+        int pid = client_player_ids[i];
+        int idx = pid - 1;
+        start_msg.player_id     = pid;
+        start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS) ? players[idx].profit : 0.0f;
+        send(connected_clients[i], &start_msg, sizeof(start_msg), 0);
+    }
+}
+
+/*
     Descricao: notifica o fim da rodada para todos os clientes (os que tão na partida atual ao menos)
     Argumentos: nenhum
     Retorno: nenhum
@@ -201,18 +200,17 @@ void notify_round_end() {
         }
     }
 
-    // Reseta variáveis para próxima rodada (mas mantém player_profits acumulados)
+    // Reseta variáveis para próxima rodada (mas mantem player_profits acumulados)
     round_bet_count = 0;
 
     for (int i = 0; i < MAX_CLIENTS; i++) {
         players[i].bet = 0.0f;
         players[i].has_bet = 0;
         players[i].cashed_out = 0;
-        // NÃO zere players[i].profit!
+        // NÃO zera players[i].profit
     }
-
-    // apenas marca rodada como encerrada
-    round_active = 0;
+    
+    round_active = 0; // apenas marca rodada como encerrada
 }
 
 /*
@@ -246,13 +244,13 @@ void* multiplier_thread(void* arg) {
             // Calcula os profits para jogadores que não fizeram cash-out
             for (int i = 0; i < MAX_CLIENTS; i++) {
                 if (players[i].has_bet && !players[i].cashed_out) {
-                    // 2) Log individual para cada jogador que perdeu
+                    // Log individual para cada jogador que perdeu
                     printf("event=explode | id=%d | m=%.2f\n", i + 1, current_multiplier);
                     
                     players[i].profit -= players[i].bet; // Perde a aposta
                     house_profit += players[i].bet; // Casa ganha a aposta
                     
-                    // 3) Log do profit individual
+                    // Log do profit individual
                     printf("event=profit | id=%d | player_profit=%.2f\n", i + 1, players[i].profit);
                 }
             }
@@ -275,8 +273,7 @@ void* multiplier_thread(void* arg) {
             
             multiplier_running = 0;
             
-            // Chama notify_round_end() DEPOIS da explosão
-            notify_round_end();
+            notify_round_end(); // Chama DEPOIS da explosão
             
             // se ainda tiver jogadores, dispara a próxima rodada
             if (num_clients > 0) {
@@ -298,7 +295,7 @@ void* multiplier_thread(void* arg) {
                 send(connected_clients[i], &msg, sizeof(msg), 0);
             }
         }
-        // log no servidor
+
         printf("event=multiplier | id=* | m=%.2f\n", current_multiplier);
 
         usleep(100 * 1000); // 100ms
@@ -333,7 +330,6 @@ void* countdown_thread(void* arg) {
         // calcula e armazena ponto de explosão
         explosion_point_global = calculate_explosion_point(round_bet_count, round_bets);
 
-        // log do evento closed
         float total_bets = 0.0f;
         for (int i = 0; i < round_bet_count; i++) {
             total_bets += round_bets[i];
@@ -365,7 +361,7 @@ int find_remaining_time() {
 
 /*
     Descricao: thread que lida com cada cliente conectado
-    Esta thread é responsável por gerenciar a comunicação com o cliente, processar apostas e cash
+    Esta thread é responsável por gerenciar a comunicação com o cliente, processar apostas e cashouts,
     Argumentos: ponteiro para os argumentos da thread, que contém o socket do cliente e o ID do jogador
     Retorno: nenhum
 */
@@ -408,7 +404,7 @@ void * client_thread_handler(void *args_ptr) {
 
             // Log para bet
             if (strcmp(received_msg.type, "bet") == 0) {
-                printf("event = %s | id = %d | bet = %.2f | N = %d\n", received_msg.type, player_id, received_msg.value, num_clients);
+                printf("event=%s | id=%d | bet=%.2f | N=%d\n", received_msg.type, player_id, received_msg.value, num_clients);
             }
 
             // Verifica se pode apostar
@@ -536,7 +532,8 @@ int main (int argc, char **argv) {
             logexit("select");
         }
 
-        // 1) Se o usuário apertou Q + Enter
+        // Se o usuário apertou Q + Enter
+        // significa que o servidor tá quittando
         if (FD_ISSET(STDIN_FILENO, &rfds)) {
             char c = getchar();
             if (c == 'Q') {
@@ -556,7 +553,7 @@ int main (int argc, char **argv) {
             }
         }
 
-        // 2) Se chegou conexão nova
+        // Se chegou conexão nova
         if (FD_ISSET(s, &rfds)) {
             struct sockaddr_storage client_storage;
             socklen_t client_addr_len = sizeof(client_storage);
