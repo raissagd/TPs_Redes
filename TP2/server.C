@@ -9,6 +9,7 @@ Aluna: Raissa Gonçalves Diniz
 Matricula: 2022055823
 -----------------------------------------------------
 */
+
 #include "common.H"
 
 #include <stdlib.h>
@@ -62,6 +63,7 @@ typedef struct {
 // ------------------------------------------------------------------------------------------------
 // toda hora ficava dando erro de não declarado, deixei aqui de uma vez
 void* countdown_thread(void* arg);
+void start_round(void);
 
 // ------------------------------------------------------------------------------------------------
 
@@ -75,6 +77,39 @@ void usage (int argc, char **argv) {
     printf("Usage: %s <v4|v6> <server port>\n", argv[0]);
     printf("Example: %s v4 51511\n", argv[0]);
     exit(EXIT_FAILURE);
+}
+
+/*
+    Descricao: inicia uma nova rodada
+    Argumentos: nenhum
+    Retorno: nenhum
+*/
+void start_round() {
+    round_active     = 1;
+    round_start_time = time(NULL);
+    printf("event=start | id=* | N=%d\n", num_clients);
+
+    // dispara a thread de contagem regressiva
+    pthread_t time_thread;
+    pthread_create(&time_thread, NULL, countdown_thread, NULL);
+    pthread_detach(time_thread);
+
+    // notifica todos os clientes sobre o start
+    aviator_msg start_msg;
+    memset(&start_msg, 0, sizeof(start_msg));
+    strcpy(start_msg.type, "start");
+    start_msg.value        = (float)COUNTDOWN_TIME;
+    start_msg.house_profit = house_profit;
+
+    for (int i = 0; i < num_clients; i++) {
+        int pid = client_player_ids[i];
+        int idx = pid - 1;
+        start_msg.player_id     = pid;
+        start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS)
+                                   ? player_profits[idx]
+                                   : 0.0f;
+        send(connected_clients[i], &start_msg, sizeof(start_msg), 0);
+    }
 }
 
 /*
@@ -169,38 +204,9 @@ void notify_round_end() {
     memset(players_cashed_out, 0, sizeof(players_cashed_out));
     memset(player_bets, 0, sizeof(player_bets));
     memset(player_has_bet, 0, sizeof(player_has_bet));
-    
-    // Inicia nova rodada automaticamente se há clientes conectados
-    if (num_clients > 0) {
-        // Inicia nova rodada automaticamente
-        round_active = 1;
-        round_start_time = time(NULL);
-        printf("event=start | id=* | N=%d\n", num_clients);
-        
-        // Cria thread de tempo para nova rodada
-        pthread_t time_thread;
-        pthread_create(&time_thread, NULL, countdown_thread, NULL);
-        pthread_detach(time_thread);
-        
-        // Notifica todos os clientes conectados sobre nova rodada
-        aviator_msg start_msg;
-        memset(&start_msg, 0, sizeof(start_msg));
-        strcpy(start_msg.type, "start");
-        start_msg.value = (float)COUNTDOWN_TIME;
-        start_msg.player_profit = 0.0f;
-        start_msg.house_profit = house_profit;
-        
-        for (int i = 0; i < num_clients; i++) {
-            int player_id = client_player_ids[i];
-            int player_index = player_id - 1;
-            
-            start_msg.player_id = player_id;
-            start_msg.player_profit = (player_index >= 0 && player_index < MAX_CLIENTS) ? player_profits[player_index] : 0.0f;
-            send(connected_clients[i], &start_msg, sizeof(aviator_msg), 0);
-        }
-    } else {
-        round_active = 0; // Só para se não há clientes
-    }
+
+    // apenas marca rodada como encerrada
+    round_active = 0;
 }
 
 /*
@@ -266,7 +272,12 @@ void* multiplier_thread(void* arg) {
             
             // Chama notify_round_end() DEPOIS da explosão
             notify_round_end();
-            break;
+            
+            // se ainda tiver jogadores, dispara a próxima rodada
+            if (num_clients > 0) {
+                start_round();
+            }
+            break; // Sai do loop
         }
 
         current_multiplier += 0.01f;
@@ -362,32 +373,26 @@ void * client_thread_handler(void *args_ptr) {
 
     add_client(csock, player_id);
 
-    // Só inicia rodada se for realmente o primeiro cliente E não há rodada
-    if (round_active == 0 && num_clients == 1) {
-        round_active     = 1;
-        round_start_time = time(NULL);
-        printf("event=start | id=* | N=%d\n", num_clients);
-
-        // Cria thread de tempo
-        pthread_t time_thread;
-        pthread_create(&time_thread, NULL, countdown_thread, NULL);
-        pthread_detach(time_thread);
+    // se não houver rodada ativa e somos o 1º cliente, começa
+    bool first = (round_active == 0 && num_clients == 1);
+    if (first) {
+        start_round();
     }
 
-    // Envia mensagem inicial (sempre com profits acumulados)
+    // se não formos o 1º cliente, mandamos o start “inicial”
     aviator_msg start_msg;
     memset(&start_msg, 0, sizeof(start_msg));
-    start_msg.player_id    = player_id;
+    start_msg.player_id = player_id;
     strcpy(start_msg.type, "start");
-    start_msg.value        = (float)find_remaining_time();
-    
-    // Envia profit acumulado do jogador
-    int player_index = player_id - 1;
-    start_msg.player_profit = (player_index >= 0 && player_index < MAX_CLIENTS) ? player_profits[player_index] : 0.0f;
+    start_msg.value = (float)find_remaining_time();
+    int idx = player_id - 1;
+    start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS) ? player_profits[idx] : 0.0f;
     start_msg.house_profit = house_profit;
 
-    if (send(csock, &start_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
-        logexit("send");
+    if (!first) {
+        if (send(csock, &start_msg, sizeof(aviator_msg), 0) != sizeof(aviator_msg)) {
+            logexit("send");
+        }
     }
 
     // Loop principal de comunicação
