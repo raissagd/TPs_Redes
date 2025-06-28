@@ -29,6 +29,22 @@ Matricula: 2022055823
 #define COUNTDOWN_TIME 10 // Tempo da janela de apostas
 #define MAX_CLIENTS 10    // Máximo de clientes
 
+// Struct para argumentos da thread
+typedef struct {
+    int      client_socket;
+    int32_t  player_id;
+} thread_args_t;
+
+// Struct para guardar dados dos jogadores
+typedef struct {
+    float profit;
+    float bet;
+    int has_bet;
+    int cashed_out;
+} Player;
+
+Player players[MAX_CLIENTS] = {0};
+
 // Variáveis globais
 int32_t next_player_id      = 1;
 int    round_active         = 0;   // 0 = não iniciada, 1 = ativa, 2 = encerrada
@@ -37,10 +53,6 @@ float  current_multiplier   = 1.0f;
 int    multiplier_running   = 0;   // Flag para controlar se está enviando multiplicadores
 float  explosion_point_global = 0.0f; // Para armazenar o ponto de explosão global
 
-int players_cashed_out[MAX_CLIENTS] = {0};
-float player_profits[MAX_CLIENTS] = {0.0f};
-float player_bets[MAX_CLIENTS] = {0.0f}; // Apostas por player_id
-int player_has_bet[MAX_CLIENTS] = {0};   // Se o jogador apostou nesta rodada
 float house_profit = 0.0f;
 float total_bets_received = 0.0f;
 float total_payouts = 0.0f;
@@ -53,12 +65,6 @@ int num_clients = 0;
 // Array para apostas
 float round_bets[MAX_CLIENTS];
 int   round_bet_count = 0;
-
-// Struct para argumentos da thread
-typedef struct {
-    int      client_socket;
-    int32_t  player_id;
-} thread_args_t;
 
 // ------------------------------------------------------------------------------------------------
 // toda hora ficava dando erro de não declarado, deixei aqui de uma vez
@@ -105,9 +111,7 @@ void start_round() {
         int pid = client_player_ids[i];
         int idx = pid - 1;
         start_msg.player_id     = pid;
-        start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS)
-                                   ? player_profits[idx]
-                                   : 0.0f;
+        start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS) ? players[idx].profit : 0.0f;
         send(connected_clients[i], &start_msg, sizeof(start_msg), 0);
     }
 }
@@ -190,9 +194,8 @@ void notify_round_end() {
         int player_index = player_id - 1;
         
         // Só envia round_ended para quem apostou
-        if (player_index >= 0 && player_index < MAX_CLIENTS && 
-            player_has_bet[player_index]) {
-            msg_fim.player_profit = player_profits[player_index];
+        if (player_index >= 0 && player_index < MAX_CLIENTS && players[player_index].has_bet) {
+            msg_fim.player_profit = players[player_index].profit;
             msg_fim.player_id = player_id;
             send(connected_clients[i], &msg_fim, sizeof(aviator_msg), 0);
         }
@@ -200,10 +203,13 @@ void notify_round_end() {
 
     // Reseta variáveis para próxima rodada (mas mantém player_profits acumulados)
     round_bet_count = 0;
-    memset(round_bets, 0, sizeof(round_bets));
-    memset(players_cashed_out, 0, sizeof(players_cashed_out));
-    memset(player_bets, 0, sizeof(player_bets));
-    memset(player_has_bet, 0, sizeof(player_has_bet));
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        players[i].bet = 0.0f;
+        players[i].has_bet = 0;
+        players[i].cashed_out = 0;
+        // NÃO zere players[i].profit!
+    }
 
     // apenas marca rodada como encerrada
     round_active = 0;
@@ -228,7 +234,7 @@ void* multiplier_thread(void* arg) {
     while (multiplier_running) {
         // verifica se chegou ao ponto de explosão ANTES de incrementar
         if (current_multiplier >= explosion_point_global) {
-            // 1) Log geral da explosão
+            // Log geral da explosão
             printf("event=explode | id=* | m=%.2f\n", current_multiplier);
             
             aviator_msg msg_exp;
@@ -239,15 +245,15 @@ void* multiplier_thread(void* arg) {
             
             // Calcula os profits para jogadores que não fizeram cash-out
             for (int i = 0; i < MAX_CLIENTS; i++) {
-                if (player_has_bet[i] && !players_cashed_out[i]) {
+                if (players[i].has_bet && !players[i].cashed_out) {
                     // 2) Log individual para cada jogador que perdeu
                     printf("event=explode | id=%d | m=%.2f\n", i + 1, current_multiplier);
                     
-                    player_profits[i] -= player_bets[i]; // Perde a aposta
-                    house_profit += player_bets[i]; // Casa ganha a aposta
+                    players[i].profit -= players[i].bet; // Perde a aposta
+                    house_profit += players[i].bet; // Casa ganha a aposta
                     
                     // 3) Log do profit individual
-                    printf("event=profit | id=%d | player_profit=%.2f\n", i + 1, player_profits[i]);
+                    printf("event=profit | id=%d | player_profit=%.2f\n", i + 1, players[i].profit);
                 }
             }
             
@@ -260,9 +266,8 @@ void* multiplier_thread(void* arg) {
                 int player_index = player_id - 1;
                 
                 // Só envia explode para quem apostou nesta rodada
-                if (player_index >= 0 && player_index < MAX_CLIENTS && 
-                    player_has_bet[player_index]) {
-                    msg_exp.player_profit = player_profits[player_index];
+                if (player_index >= 0 && player_index < MAX_CLIENTS && players[player_index].has_bet) {
+                    msg_exp.player_profit = players[player_index].profit;
                     msg_exp.player_id = player_id;
                     send(connected_clients[i], &msg_exp, sizeof(msg_exp), 0);
                 }
@@ -289,8 +294,7 @@ void* multiplier_thread(void* arg) {
             int player_index = player_id - 1;
             
             // Só envia se o jogador APOSTOU nesta rodada E não fez cashout
-            if (player_index >= 0 && player_index < MAX_CLIENTS && 
-                player_has_bet[player_index] && !players_cashed_out[player_index]) {
+            if (player_index >= 0 && player_index < MAX_CLIENTS && players[player_index].has_bet && !players[player_index].cashed_out) {
                 send(connected_clients[i], &msg, sizeof(msg), 0);
             }
         }
@@ -386,7 +390,7 @@ void * client_thread_handler(void *args_ptr) {
     strcpy(start_msg.type, "start");
     start_msg.value = (float)find_remaining_time();
     int idx = player_id - 1;
-    start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS) ? player_profits[idx] : 0.0f;
+    start_msg.player_profit = (idx >= 0 && idx < MAX_CLIENTS) ? players[idx].profit : 0.0f;
     start_msg.house_profit = house_profit;
 
     if (!first) {
@@ -421,8 +425,8 @@ void * client_thread_handler(void *args_ptr) {
                     if (round_bet_count < MAX_CLIENTS && player_index >= 0 && player_index < MAX_CLIENTS) {
                         // Armazena a aposta tanto para cálculo do ponto de explosão quanto por player
                         round_bets[round_bet_count] = received_msg.value;
-                        player_bets[player_index] = received_msg.value;
-                        player_has_bet[player_index] = 1;
+                        players[player_index].bet = received_msg.value;
+                        players[player_index].has_bet = 1;
                         
                         total_bets_received += received_msg.value;
                         round_bet_count++;
@@ -433,39 +437,36 @@ void * client_thread_handler(void *args_ptr) {
                 int player_index = player_id - 1; // IDs começam em 1, arrays em 0
                 
                 // Verifica se o jogador apostou nesta rodada e ainda não sacou
-                if (player_index >= 0 && player_index < MAX_CLIENTS && 
-                    player_has_bet[player_index] && 
-                    !players_cashed_out[player_index] &&
-                    (round_active == 2 || multiplier_running)) { // Pode sacar durante o voo
+                if (player_index >= 0 && player_index < MAX_CLIENTS && players[player_index].has_bet && !players[player_index].cashed_out && (round_active == 2 || multiplier_running)) {
                     
                     printf("event=cashout | id=%d | m=%.2f\n", player_id, current_multiplier);
                     
                     // Calcula o payout
-                    float bet_amount = player_bets[player_index];
+                    float bet_amount = players[player_index].bet;
                     float payout = bet_amount * current_multiplier;
                     float profit = payout - bet_amount;
                     
                     printf("event=payout | id=%d | payout=%.2f\n", player_id, payout);
                     
                     // Atualiza os profits (ACUMULA!)
-                    player_profits[player_index] += profit;
+                    players[player_index].profit += profit;
                     total_payouts += payout;
                     house_profit = total_bets_received - total_payouts;
-                    players_cashed_out[player_index] = 1; // Marca como fez cash-out
+                    players[player_index].cashed_out = 1; // Marca como fez cash-out
 
-                    printf("event=profit | id=%d | player_profit=%.2f\n", player_id, player_profits[player_index]);
+                    printf("event=profit | id=%d | player_profit=%.2f\n", player_id, players[player_index].profit);
                     
                     // Prepara mensagem de resposta
                     strcpy(response_msg.type, "payout");
                     response_msg.value = payout;
-                    response_msg.player_profit = player_profits[player_index];
+                    response_msg.player_profit = players[player_index].profit;
                     response_msg.house_profit = house_profit;
                     
                 } else {
                     // Jogador não pode fazer cash-out
                     strcpy(response_msg.type, "cashout_rejected");
                     response_msg.value = 0.0f;
-                    response_msg.player_profit = player_profits[player_index >= 0 ? player_index : 0];
+                    response_msg.player_profit = players[player_index >= 0 ? player_index : 0].profit;
                     response_msg.house_profit = house_profit;
                 }
 
